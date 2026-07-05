@@ -378,23 +378,49 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"ok": False, "error": f"HTTP {status}"}, 400)
 
     def _resolve_b23_short_link(self, short_url):
-        """解析 b23.tv 短链接 → 返回 BV号 或 None"""
+        """解析 b23.tv / bili2233.cn 短链接 → 返回 BV号 或 None
+        策略：HTTP重定向 → meta refresh → JS跳转 → HTML全文搜索"""
         try:
+            # === 策略1: HTTP 跟随重定向 ===
             req = urllib.request.Request(short_url, headers={
                 "User-Agent": UA,
                 "Accept": "text/html,application/xhtml+xml,*/*",
             }, method='GET')
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                final_url = resp.geturl()
-                # 从重定向后的URL提取BV
-                m = re.search(r'(BV[bB0-9a-zA-Z]{8,})', final_url)
-                if m:
-                    return m.group(1)
-                # 从HTML内容提取
-                html = resp.read().decode("utf-8", errors="replace")[:10000]
-                m = re.search(r'bilibili\.com/video/(BV[bB0-9a-zA-Z]{8,})', html)
-                if m:
-                    return m.group(1)
+            try:
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    final_url = resp.geturl()
+                    if 'bilibili.com' in final_url:
+                        m = re.search(r'(BV[bB0-9a-zA-Z]{8,})', final_url)
+                        if m: return m.group(1)
+                    html = resp.read().decode("utf-8", errors="replace")[:20000]
+            except urllib.error.HTTPError as e:
+                # 手动处理重定向（某些时候 urllib 不跟随）
+                if 300 <= e.code < 400:
+                    loc = e.headers.get("Location", "")
+                    m = re.search(r'(BV[bB0-9a-zA-Z]{8,})', loc)
+                    if m: return m.group(1)
+                html = (e.read() or b"").decode("utf-8", errors="replace")[:20000]
+
+            # === 策略2: meta refresh 跳转 ===
+            m = re.search(r"url=([^\"'\s>]*bilibili[^\"'\s>]*)", html, re.IGNORECASE)
+            if m:
+                bv = re.search(r'(BV[bB0-9a-zA-Z]{8,})', m.group(1))
+                if bv: return bv.group(1)
+
+            # === 策略3: JS 跳转 ===
+            m = re.search(r'location\.(?:href|replace)\s*=\s*[\"\']([^\"\']*bilibili[^\"\']*)[\"\']', html, re.IGNORECASE)
+            if m:
+                bv = re.search(r'(BV[bB0-9a-zA-Z]{8,})', m.group(1))
+                if bv: return bv.group(1)
+
+            # === 策略4: 全文搜索 bilibili.com/video/BV ===
+            m = re.search(r'bilibili\.com/video/(BV[bB0-9a-zA-Z]{8,})', html, re.IGNORECASE)
+            if m: return m.group(1)
+
+            # === 策略5: JSON bvid ===
+            m = re.search(r'"bvid"\s*:\s*"(BV[bB0-9a-zA-Z]{8,})"', html)
+            if m: return m.group(1)
+
         except Exception:
             pass
         return None
@@ -411,8 +437,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             m = re.search(r'(BV[bB0-9a-zA-Z]{8,})', url_param)
             if m:
                 bvid = m.group(1)
-            # 如果是 b23.tv 短链，服务端解析
-            elif 'b23.tv' in url_param:
+            # 如果是 b23.tv 或 bili2233.cn 短链，服务端解析
+            elif 'b23.tv' in url_param or 'bili2233.cn' in url_param:
                 bvid = self._resolve_b23_short_link(url_param)
 
         if not bvid:

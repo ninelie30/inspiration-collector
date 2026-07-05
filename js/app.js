@@ -194,9 +194,9 @@ function isErrorPage(html, title) {
 
 // ---- B站 API 提取 ----
 function extractBvid(url) {
-  // 匹配 BV1xxxxxx 或 bv1xxxxxx
-  const m = url.match(/\/(BV[bB0-9a-zA-Z]{8,})/);
-  return m ? m[1] : null;
+  // 匹配 BV1xxxxxx（从 URL 路径、参数、或任意位置）
+  const m = url.match(/BV[bB0-9a-zA-Z]{8,}/);
+  return m ? m[0] : null;
 }
 
 async function fetchBilibiliMeta(url) {

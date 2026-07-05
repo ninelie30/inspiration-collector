@@ -16,8 +16,8 @@ export async function onRequestGet(context) {
       finalBvid = m[1];
     }
     // 如果是 b23.tv 短链，服务端解析
-    else if (urlParam.includes("b23.tv")) {
-      finalBvid = await resolveB23ShortLink(urlParam);
+    else if (urlParam.includes("b23.tv") || urlParam.includes("bili2233.cn")) {
+      finalBvid = await resolveShortLink(urlParam);
     }
   }
 
@@ -32,8 +32,8 @@ export async function onRequestGet(context) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.bilibili.com/",
+        "Origin": "https://www.bilibili.com",
       },
-      redirect: "follow",
     });
 
     const data = await resp.json();
@@ -43,31 +43,78 @@ export async function onRequestGet(context) {
   }
 }
 
-// 解析 b23.tv 短链接 → 返回 BV号
-async function resolveB23ShortLink(shortUrl) {
+// 解析 b23.tv / bili2233.cn 短链接 → 返回 BV号
+// 策略：HTTP 重定向 → meta refresh → JS 跳转 → HTML 提取
+async function resolveShortLink(shortUrl) {
+  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+  // === 策略1: HTTP 重定向（redirect: "follow"） ===
   try {
     const resp = await fetch(shortUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": ua,
         "Accept": "text/html,application/xhtml+xml,*/*",
       },
       redirect: "follow",
     });
 
-    // 从最终URL提取BV
     const finalUrl = resp.url;
-    let m = finalUrl.match(/(BV[bB0-9a-zA-Z]{8,})/);
-    if (m) return m[1];
-
-    // 从HTML内容提取
-    const html = await resp.text();
-    m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/);
-    if (m) return m[1];
-
-    return null;
-  } catch {
-    return null;
+    // 检查是否真的跳到了 bilibili.com
+    if (finalUrl.includes("bilibili.com")) {
+      const m = finalUrl.match(/(BV[bB0-9a-zA-Z]{8,})/);
+      if (m) return m[1];
+    }
+  } catch (e) {
+    // HTTP redirect failed, continue to next strategy
   }
+
+  // === 策略2: 手动处理（不跟随重定向），检查 Location header ===
+  try {
+    const resp = await fetch(shortUrl, {
+      headers: { "User-Agent": ua, "Accept": "text/html,*/*" },
+      redirect: "manual",
+    });
+
+    // 检查 HTTP 重定向
+    if (resp.status >= 300 && resp.status < 400) {
+      const loc = resp.headers.get("Location") || resp.headers.get("location") || "";
+      const m = loc.match(/(BV[bB0-9a-zA-Z]{8,})/);
+      if (m) return m[1];
+    }
+
+    // 解析 HTML 内容
+    const html = await resp.text();
+
+    // meta refresh 跳转: <meta http-equiv="refresh" content="0;url=https://www.bilibili.com/video/BV...">
+    const metaMatch = html.match(/url=([^"'\s>]*bilibili[^"'\s>]*)/i);
+    if (metaMatch) {
+      const m = metaMatch[1].match(/(BV[bB0-9a-zA-Z]{8,})/);
+      if (m) return m[1];
+    }
+
+    // JS 跳转: location.href="..." 或 location.replace("...")
+    const jsMatch = html.match(/location\.(?:href|replace)\s*=\s*["']([^"']*bilibili[^"']*)["']/i);
+    if (jsMatch) {
+      const m = jsMatch[1].match(/(BV[bB0-9a-zA-Z]{8,})/);
+      if (m) return m[1];
+    }
+
+    // 直接在全文中搜索 bilibili.com/video/BV
+    const directMatch = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/i);
+    if (directMatch) return directMatch[1];
+
+    // 搜索 video/BV 模式（相对路径）
+    const relMatch = html.match(/["']\/video\/(BV[bB0-9a-zA-Z]{8,})["']/);
+    if (relMatch) return relMatch[1];
+
+    // JSON 中的 aid 或 bvid
+    const jsonMatch = html.match(/"bvid"\s*:\s*"(BV[bB0-9a-zA-Z]{8,})"/);
+    if (jsonMatch) return jsonMatch[1];
+  } catch (e) {
+    // HTML parsing failed
+  }
+
+  return null;
 }
 
 // OPTIONS (CORS preflight)
