@@ -242,9 +242,13 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     # ========== 坚果云 WebDAV 代理 ==========
 
-    WEBDAV_BASE = "https://dav.jianguoyun.com/dav"
+    WEBDAV_DEFAULT_BASE = "https://dav.jianguoyun.com/dav"
     WEBDAV_FILE = "/inspiration-collector/data.json"
     WEBDAV_DIR = "/inspiration-collector"
+
+    def _get_webdav_base(self, body):
+        """获取 WebDAV 服务器地址，支持自定义"""
+        return body.get("server", "").rstrip("/") or self.WEBDAV_DEFAULT_BASE
 
     def _read_post_body(self):
         """读取 POST 请求的 JSON body"""
@@ -253,7 +257,9 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             return {}
         raw = self.rfile.read(length)
         try:
+            return json.loads(raw)
         except Exception:
+            return {}
 
     def _webdav_auth_header(self, username, password):
         """构造 Basic Auth header"""
@@ -261,9 +267,9 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         encoded = base64.b64encode(credentials.encode()).decode()
         return f"Basic {encoded}"
 
-    def _webdav_request(self, method, path, auth, body=None, content_type=None, extra_headers=None):
+    def _webdav_request(self, base, method, path, auth, body=None, content_type=None, extra_headers=None):
         """发送 WebDAV 请求到坚果云"""
-        url = self.WEBDAV_BASE + path
+        url = base + path
         headers = {"Authorization": auth}
         if content_type:
             headers["Content-Type"] = content_type
@@ -291,15 +297,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"ok": False, "error": "缺少账号或密码"}, 400)
             return
 
+        base = self._get_webdav_base(body)
         auth = self._webdav_auth_header(username, password)
-        status, _ = self._webdav_request("PROPFIND", "/", auth, extra_headers={"Depth": "0"})
+        status, _ = self._webdav_request(base, "PROPFIND", "/", auth, extra_headers={"Depth": "0"})
 
         if status in (207, 200):
             self._send_json({"ok": True})
         elif status == 401:
             self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
+        elif status == 405:
+            self._send_json({"ok": False, "error": "服务器地址不正确，请检查坚果云WebDAV地址（设置→安全选项→第三方应用管理）"}, 400)
         else:
-            self._send_json({"ok": False, "error": f"HTTP {status}"}, 400)
+            self._send_json({"ok": False, "error": f"服务器返回 HTTP {status}，请检查地址和账号是否正确"}, 400)
 
     def _handle_webdav_pull(self):
         """从坚果云拉取数据"""
@@ -311,8 +320,9 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"ok": False, "error": "缺少账号或密码"}, 400)
             return
 
+        base = self._get_webdav_base(body)
         auth = self._webdav_auth_header(username, password)
-        status, resp_body = self._webdav_request("GET", self.WEBDAV_FILE, auth)
+        status, resp_body = self._webdav_request(base, "GET", self.WEBDAV_FILE, auth)
 
         if status == 404:
             # 文件不存在（首次使用）
@@ -348,14 +358,15 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"ok": False, "error": "缺少数据"}, 400)
             return
 
+        base = self._get_webdav_base(body)
         auth = self._webdav_auth_header(username, password)
 
         # 确保目录存在（已存在返回405，忽略）
-        self._webdav_request("MKCOL", self.WEBDAV_DIR, auth)
+        self._webdav_request(base, "MKCOL", self.WEBDAV_DIR, auth)
 
         # 上传文件
         json_str = json.dumps(data, ensure_ascii=False)
-        status, _ = self._webdav_request("PUT", self.WEBDAV_FILE, auth, body=json_str, content_type="application/json")
+        status, _ = self._webdav_request(base, "PUT", self.WEBDAV_FILE, auth, body=json_str, content_type="application/json")
 
         if status == 401:
             self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
@@ -759,6 +770,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         data = json.loads(body.decode("utf-8"))
                         self._send_json(data)
                     except Exception:
+                        self._send_text(body, content_type=content_type)
                 else:
                     # HTML 或其他文本
                     self._send_text(body, content_type=content_type)

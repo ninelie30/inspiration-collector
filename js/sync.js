@@ -44,6 +44,7 @@ async function webdavRequest(endpoint, settings) {
     body: JSON.stringify({
       username: settings.username,
       password: settings.password,
+      server: settings.server || '',
     }),
   });
   if (!resp.ok) {
@@ -60,6 +61,7 @@ async function webdavPushData(settings, data) {
     body: JSON.stringify({
       username: settings.username,
       password: settings.password,
+      server: settings.server || '',
       data: data,
     }),
   });
@@ -331,8 +333,10 @@ function toggleSync() {
 function saveWebDAVSettings() {
   const userInput = document.getElementById('setting-webdav-user');
   const passInput = document.getElementById('setting-webdav-pass');
+  const urlInput = document.getElementById('setting-webdav-url');
   const username = userInput ? userInput.value.trim() : '';
   const password = passInput ? passInput.value.trim() : '';
+  const server = urlInput ? urlInput.value.trim() : '';
 
   if (!username || !password) {
     toast('请填写账号和密码');
@@ -342,6 +346,7 @@ function saveWebDAVSettings() {
   const settings = getSyncSettings();
   settings.username = username;
   settings.password = password;
+  settings.server = server;
   saveSyncSettings(settings);
   toast('已保存，点击「测试连接」验证');
 
@@ -445,6 +450,7 @@ function updateSyncUI() {
   const autoCheckbox = document.getElementById('setting-auto-sync');
   const userInput = document.getElementById('setting-webdav-user');
   const passInput = document.getElementById('setting-webdav-pass');
+  const urlInput = document.getElementById('setting-webdav-url');
 
   if (checkbox) checkbox.checked = syncState.enabled;
   if (config) config.style.display = syncState.enabled ? 'block' : 'none';
@@ -453,6 +459,7 @@ function updateSyncUI() {
   const settings = getSyncSettings();
   if (userInput) userInput.value = settings.username || '';
   if (passInput) passInput.value = settings.password || '';
+  if (urlInput) urlInput.value = settings.server || '';
 
   if (syncState.enabled && syncState.connected && syncState.lastPush) {
     updateSyncStatus('已同步');

@@ -1,18 +1,23 @@
 // 坚果云 WebDAV 代理 - Cloudflare Pages Function
 // 前端通过此函数代理与坚果云 WebDAV 通信，避免浏览器 CORS 限制
 
-const WEBDAV_BASE = 'https://dav.jianguoyun.com/dav';
+const DEFAULT_BASE = 'https://dav.jianguoyun.com/dav';
 const FILE_PATH = '/inspiration-collector/data.json';
 const DIR_PATH = '/inspiration-collector';
+
+function baseUrl(server) {
+  // 去掉尾部斜杠，统一格式
+  return (server || DEFAULT_BASE).replace(/\/+$/, '');
+}
 
 function makeAuth(username, password) {
   return 'Basic ' + btoa(username + ':' + password);
 }
 
-async function ensureDir(auth) {
+async function ensureDir(base, auth) {
   // 尝试创建目录，已存在返回405，忽略即可
   try {
-    await fetch(WEBDAV_BASE + DIR_PATH, {
+    await fetch(base + DIR_PATH, {
       method: 'MKCOL',
       headers: { Authorization: auth },
     });
@@ -31,44 +36,51 @@ export async function onRequestPost(context) {
 
   try {
     const body = await context.request.json();
-    const { username, password, data } = body;
+    const { username, password, server, data } = body;
 
     if (!username || !password) {
       return new Response(JSON.stringify({ ok: false, error: '缺少账号或密码' }), { status: 400, headers: corsHeaders });
     }
 
     const auth = makeAuth(username, password);
+    const base = baseUrl(server);
     const url = new URL(context.request.url);
     const action = url.pathname.replace('/api/webdav/', '');
 
     // 测试连接
     if (action === 'test') {
-      const resp = await fetch(WEBDAV_BASE + '/', {
-        method: 'PROPFIND',
-        headers: {
-          Authorization: auth,
-          Depth: '0',
-        },
-      });
+      const testUrl = base + '/';
+      try {
+        const resp = await fetch(testUrl, {
+          method: 'PROPFIND',
+          headers: {
+            Authorization: auth,
+            Depth: '0',
+          },
+        });
 
-      if (resp.status === 207 || resp.status === 200) {
-        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
-      } else if (resp.status === 401) {
-        return new Response(JSON.stringify({ ok: false, error: '账号或密码错误' }), { status: 401, headers: corsHeaders });
-      } else {
-        return new Response(JSON.stringify({ ok: false, error: `HTTP ${resp.status}` }), { status: 400, headers: corsHeaders });
+        if (resp.status === 207 || resp.status === 200) {
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+        } else if (resp.status === 401 || resp.status === 403) {
+          return new Response(JSON.stringify({ ok: false, error: '账号或密码错误' }), { status: 401, headers: corsHeaders });
+        } else if (resp.status === 405) {
+          return new Response(JSON.stringify({ ok: false, error: '服务器地址不正确，请检查坚果云WebDAV地址（设置→安全选项→第三方应用管理）' }), { status: 400, headers: corsHeaders });
+        } else {
+          return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址和账号是否正确` }), { status: 400, headers: corsHeaders });
+        }
+      } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: `无法连接服务器: ${e.message}。请检查地址是否正确` }), { status: 400, headers: corsHeaders });
       }
     }
 
     // 拉取数据
     if (action === 'pull') {
-      const resp = await fetch(WEBDAV_BASE + FILE_PATH, {
+      const resp = await fetch(base + FILE_PATH, {
         method: 'GET',
         headers: { Authorization: auth },
       });
 
       if (resp.status === 404) {
-        // 文件不存在（首次使用）
         return new Response(JSON.stringify({ ok: true, data: null }), { headers: corsHeaders });
       }
 
@@ -95,10 +107,9 @@ export async function onRequestPost(context) {
         return new Response(JSON.stringify({ ok: false, error: '缺少数据' }), { status: 400, headers: corsHeaders });
       }
 
-      // 确保目录存在
-      await ensureDir(auth);
+      await ensureDir(base, auth);
 
-      const resp = await fetch(WEBDAV_BASE + FILE_PATH, {
+      const resp = await fetch(base + FILE_PATH, {
         method: 'PUT',
         headers: {
           Authorization: auth,
@@ -112,7 +123,7 @@ export async function onRequestPost(context) {
       }
 
       if (!resp.ok && resp.status !== 201 && resp.status !== 204) {
-        return new Response(JSON.stringify({ ok: false, error: `HTTP ${resp.status}` }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ ok: false, error: `上传失败 HTTP ${resp.status}` }), { status: 400, headers: corsHeaders });
       }
 
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
