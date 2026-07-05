@@ -2391,3 +2391,12 @@ body::after {
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* 诊断结果 — 复制按钮 */
+#diagnostic-copy-wrap {
+  animation: fadeIn 0.3s ease;
+}
+#diagnostic-copy-wrap .api-key-actions__btn--save {
+  padding: 10px;
+  font-size: 14px;
+}

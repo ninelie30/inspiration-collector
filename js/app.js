@@ -2373,6 +2373,7 @@ async function runLinkDiagnostic() {
   const resultEl = document.getElementById('diagnostic-result');
   resultEl.style.display = 'block';
   resultEl.textContent = '正在诊断...';
+  document.getElementById('diagnostic-copy-wrap').style.display = 'none';
 
   const lines = [];
   const origin = window.location.origin;
@@ -2479,6 +2480,13 @@ async function runLinkDiagnostic() {
   }
 
   resultEl.textContent = lines.join('\n');
+  document.getElementById('diagnostic-copy-wrap').style.display = 'block';
+}
+
+// 复制诊断结果
+function copyDiagnosticResult() {
+  const text = document.getElementById('diagnostic-result').textContent;
+  navigator.clipboard.writeText(text).then(() => toast('✅ 诊断结果已复制到剪贴板'));
 }
 
 // 强制重置应用（清除SW + 缓存 + 刷新）

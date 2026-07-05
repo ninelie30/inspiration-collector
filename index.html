@@ -479,6 +479,9 @@
           <div class="settings-card">
             <button class="settings-action-btn" onclick="runLinkDiagnostic()"><span class="btn-icon" data-icon="stethoscope"></span> 运行链接解析诊断</button>
             <div id="diagnostic-result" style="display:none;margin-top:12px;padding:12px;border-radius:12px;background:var(--glass-bg);font-size:13px;line-height:1.8;white-space:pre-wrap;word-break:break-all;"></div>
+            <div id="diagnostic-copy-wrap" style="display:none;margin-top:8px;">
+              <button class="api-key-actions__btn api-key-actions__btn--save" style="width:100%" onclick="copyDiagnosticResult()">📋 复制诊断结果</button>
+            </div>
           </div>
           <div class="settings-card">
             <button class="settings-action-btn settings-action-btn--danger" onclick="forceResetApp()"><span class="btn-icon" data-icon="refresh"></span> 强制重置应用（清除SW+缓存）</button>
