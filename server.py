@@ -299,13 +299,24 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         base = self._get_webdav_base(body)
         auth = self._webdav_auth_header(username, password)
-        # GET 数据文件测试认证（标准HTTP，避免 WebDAV 方法兼容问题）
-        status, _ = self._webdav_request(base, "GET", self.WEBDAV_FILE, auth)
+        # 用 PROPFIND 测试根目录连通性（WebDAV 标准方法，比 GET 更兼容）
+        # Depth: 0 只请求根目录属性，不列子资源
+        status, _ = self._webdav_request(
+            base, "PROPFIND", "/", auth,
+            body='<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop></prop></propfind>',
+            content_type="application/xml; charset=utf-8",
+            extra_headers={"Depth": "0"},
+        )
 
-        # 200=文件存在, 404=首次使用, 非401/403=认证通过
+        # 207=PROPFIND成功, 404=首次使用(目录不存在), 405=方法不允许但认证通过
+        # 任何非401/403响应都说明连接和认证正常
         if status == 401:
             self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
-        elif status in (200, 404):
+        elif status == 403:
+            self._send_json({"ok": False, "error": "权限不足，请检查账号是否开启WebDAV"}, 403)
+        elif status == 0:
+            self._send_json({"ok": False, "error": "无法连接到服务器，请检查网络和地址"}, 400)
+        elif status in (200, 207, 404, 405):
             self._send_json({"ok": True})
         else:
             self._send_json({"ok": False, "error": f"服务器返回 HTTP {status}，请检查地址是否正确"}, 400)
@@ -324,8 +335,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         auth = self._webdav_auth_header(username, password)
         status, resp_body = self._webdav_request(base, "GET", self.WEBDAV_FILE, auth)
 
-        if status == 404:
-            # 文件不存在（首次使用）
+        if status in (404, 405):
+            # 文件不存在（首次使用）；405=方法不允许，也视为文件不存在
             self._send_json({"ok": True, "data": None})
             return
 
@@ -385,6 +396,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             req = urllib.request.Request(short_url, headers={
                 "User-Agent": UA,
                 "Accept": "text/html,application/xhtml+xml,*/*",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Referer": "https://www.bilibili.com/",
             }, method='GET')
             try:
                 with urllib.request.urlopen(req, timeout=8) as resp:
@@ -421,6 +434,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             m = re.search(r'"bvid"\s*:\s*"(BV[bB0-9a-zA-Z]{8,})"', html)
             if m: return m.group(1)
 
+            # === 策略6: URL参数中的 bvid ===
+            m = re.search(r'[?&]bvid=(BV[bB0-9a-zA-Z]{8,})', html)
+            if m: return m.group(1)
+
         except Exception:
             pass
         return None
@@ -430,6 +447,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         qs = urllib.parse.parse_qs(parsed.query)
         bvid = qs.get("bvid", [None])[0]
         url_param = qs.get("url", [None])[0]
+        resolve_only = qs.get("resolve", [None])[0]  # 前端短链解析模式：只返回 BV号
 
         # 如果传了 url 而不是 bvid，尝试从 URL 提取 BV
         if not bvid and url_param:
@@ -443,6 +461,11 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         if not bvid:
             self._send_json({"error": "无法获取BV号，请确认链接正确"}, 400)
+            return
+
+        # 短链解析模式：只返回 BV号，不调 B站 API
+        if resolve_only:
+            self._send_json({"bvid": bvid})
             return
 
         api_url = f"https://api.bilibili.com/x/web-interface/view?bvid={urllib.parse.quote(bvid)}"
