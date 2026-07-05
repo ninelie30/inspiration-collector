@@ -228,14 +228,35 @@ async function fetchBilibiliMeta(url) {
       debugLog.push(`短链解析异常: ${e.message}`);
     }
 
-    // Fallback: 代理抓取 HTML 提取 BV
+    // Fallback 1: SW 代理（绕过 Cloudflare IP 限制，从浏览器直接请求）
+    if (!bvid && navigator.serviceWorker) {
+      try {
+        const swUrl = `/sw-proxy/${encodeURIComponent(url)}`;
+        const swResp = await fetchWithTimeout(swUrl, {}, 10000);
+        if (swResp.ok) {
+          const text = await swResp.text();
+          let m = text.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/i);
+          if (!m) m = text.match(/"bvid"\s*:\s*"(BV[bB0-9a-zA-Z]{8,})"/);
+          if (!m) m = text.match(/[?&]bvid=(BV[bB0-9a-zA-Z]{8,})/i);
+          if (!m) m = text.match(/(BV[bB0-9a-zA-Z]{10,})/);
+          if (m) {
+            bvid = m[1];
+            debugLog.push(`短链SW代理: ✅ BV=${bvid}`);
+          }
+        }
+      } catch (e) {
+        debugLog.push(`短链SW代理: ${e.message}`);
+      }
+    }
+
+    // Fallback 2: CORS 代理抓取 HTML 提取 BV（加长超时，国内服务更稳定）
     if (!bvid) {
-      const html = await proxyFetch(url, 5000);
+      const html = await proxyFetch(url, 10000);
       if (html) {
         const m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/);
         if (m) bvid = m[1];
       }
-      debugLog.push(`短链HTML解析: ${bvid || '失败'}`);
+      debugLog.push(`短链CORS解析: ${bvid || '失败'}`);
     }
   }
 
