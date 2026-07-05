@@ -29,9 +29,20 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+// 带超时的 fetch，避免 Cloudflare Workers 等待坚果云响应过久导致 520
+async function webdavFetch(url, options, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 async function ensureDir(base, auth) {
   try {
-    await fetch(base + DIR_PATH, {
+    await webdavFetch(base + DIR_PATH, {
       method: 'MKCOL',
       headers: { Authorization: auth },
     });
@@ -54,7 +65,7 @@ export async function onRequestPost(context) {
     // === 测试连接 ===
     if (action === 'test') {
       try {
-        const resp = await fetch(base + FILE_PATH, {
+        const resp = await webdavFetch(base + FILE_PATH, {
           method: 'GET',
           headers: { Authorization: auth },
         });
@@ -69,13 +80,13 @@ export async function onRequestPost(context) {
         }
         return jsonResponse({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址是否正确` }, 400);
       } catch (e) {
-        return jsonResponse({ ok: false, error: `无法连接服务器: ${e.message}` }, 400);
+        return jsonResponse({ ok: false, error: `无法连接服务器: ${e.message}` }, 502);
       }
     }
 
     // === 拉取数据 ===
     if (action === 'pull') {
-      const resp = await fetch(base + FILE_PATH, {
+      const resp = await webdavFetch(base + FILE_PATH, {
         method: 'GET',
         headers: { Authorization: auth },
       });
@@ -111,7 +122,7 @@ export async function onRequestPost(context) {
       // 确保目录存在（已存在返回405，忽略）
       await ensureDir(base, auth);
 
-      const resp = await fetch(base + FILE_PATH, {
+      const resp = await webdavFetch(base + FILE_PATH, {
         method: 'PUT',
         headers: {
           Authorization: auth,
@@ -134,7 +145,7 @@ export async function onRequestPost(context) {
     return jsonResponse({ ok: false, error: '未知操作: ' + action }, 400);
 
   } catch (e) {
-    return jsonResponse({ ok: false, error: e.message }, 500);
+    return jsonResponse({ ok: false, error: e.message, _type: e.name }, 500);
   }
 }
 
