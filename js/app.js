@@ -54,6 +54,9 @@ function apiUrl(path) {
   return `${origin}${path}`;
 }
 
+// Render 代理地址（部署后替换为实际 URL）
+const BILI_FALLBACK = ''; // e.g. 'https://inspiration-collector.onrender.com'
+
 // 将图片URL通过本地代理转发（解决B站/抖音等防盗链 + HTTP混合内容问题）
 function proxyImageUrl(url) {
   if (!url) return '';
