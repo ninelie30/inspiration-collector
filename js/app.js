@@ -279,6 +279,26 @@ async function fetchBilibiliMeta(url) {
     debugLog.push(`方案2(直连): ${e.message}`);
   }
 
+  // === 方案2.5: Service Worker 代理（绕过 CORS） ===
+  try {
+    const swUrl = `/sw-proxy/${encodeURIComponent(apiUrl2)}`;
+    const resp = await fetchWithTimeout(swUrl, {}, 10000);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.code === 0 && data.data) {
+        debugLog.push('方案2.5(SW代理): ✅ 成功');
+        const meta = buildBilibiliMeta(data.data, url, bvid);
+        meta._debug = debugLog.join('; ');
+        return meta;
+      }
+      debugLog.push(`方案2.5(SW代理): code=${data.code}`);
+    } else {
+      debugLog.push(`方案2.5(SW代理): HTTP ${resp.status}`);
+    }
+  } catch (e) {
+    debugLog.push(`方案2.5(SW代理): ${e.message}`);
+  }
+
   // === 方案3: 通过公共 JSON 代理调用B站 API ===
   const jsonData = await proxyFetchJson(apiUrl2, 8000);
   if (jsonData && jsonData.code === 0 && jsonData.data) {

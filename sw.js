@@ -1,5 +1,5 @@
 // 灵感收藏家 - Service Worker
-const CACHE_NAME = 'inspiration-collector-v20';
+const CACHE_NAME = 'inspiration-collector-v21';
 const ASSETS = [
   '/',
   '/index.html',
@@ -41,6 +41,13 @@ self.addEventListener('fetch', (event) => {
   // API 请求：直接透传到网络，不走缓存
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Service Worker 代理：绕过 CORS 直接请求外部 API
+  if (url.pathname.startsWith('/sw-proxy/')) {
+    const target = decodeURIComponent(url.pathname.slice('/sw-proxy/'.length));
+    event.respondWith(fetch(target));
     return;
   }
 
