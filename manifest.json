@@ -2,7 +2,7 @@
   "name": "灵感收藏家",
   "short_name": "灵感收藏",
   "description": "随手记录灵感、语音想法和图片，AI自动分类管理你的碎片信息",
-  "start_url": "/index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#F6F4FB",

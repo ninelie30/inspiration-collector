@@ -1,5 +1,5 @@
 // 灵感收藏家 - Service Worker
-const CACHE_NAME = 'inspiration-collector-v19';
+const CACHE_NAME = 'inspiration-collector-v20';
 const ASSETS = [
   '/',
   '/index.html',
@@ -49,6 +49,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 页面导航请求：网络优先，保证始终加载最新版本（修复 PWA 启动白屏）
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
   // 对 JS/CSS 用"网络优先"策略，确保拿到最新代码
   const isCodeFile = url.pathname.endsWith('.js') || url.pathname.endsWith('.css');
 
@@ -80,9 +96,7 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       }).catch(() => {
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
+        // 已在上方 navigate 分支处理，此处仅兜底
       });
     })
   );
