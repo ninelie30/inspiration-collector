@@ -1,5 +1,5 @@
 // 灵感收藏家 - Service Worker
-const CACHE_NAME = 'inspiration-collector-v23';
+const CACHE_NAME = 'inspiration-collector-v24';
 const ASSETS = [
   '/',
   '/index.html',
@@ -48,9 +48,15 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/sw-proxy/')) {
     const target = decodeURIComponent(url.pathname.slice('/sw-proxy/'.length));
     event.respondWith(
-      fetch(target).catch(err => new Response(JSON.stringify({
-        error: 'SW proxy fetch failed', message: err.message, target: target.substring(0, 60)
-      }), { status: 502, headers: { 'Content-Type': 'application/json' } }))
+      fetch(target).then(r => r).catch(err => {
+        const detail = err.toString();
+        return new Response(JSON.stringify({
+          error: 'SW fetch failed',
+          message: err.message,
+          name: err.name,
+          target: target.substring(0, 80)
+        }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      })
     );
     return;
   }

@@ -2517,6 +2517,28 @@ async function runLinkDiagnostic() {
   }
   lines.push('');
 
+  // 4c. 对比：SW 访问百度（判断是 iOS SW 限制还是 B站 被屏蔽）
+  lines.push(`🔀 SW 代理测试（百度对比）:`);
+  try {
+    const ctrl = new AbortController();
+    const tmr = setTimeout(() => ctrl.abort(), 8000);
+    const resp = await fetch(`/sw-proxy/${encodeURIComponent('https://www.baidu.com')}`, { signal: ctrl.signal, cache: 'no-store' });
+    clearTimeout(tmr);
+    const txt = await resp.text();
+    lines.push(`  HTTP状态: ${resp.status}`);
+    lines.push(`  响应大小: ${txt.length} 字节`);
+    if (resp.ok && txt.length > 500 && txt.includes('<title>')) {
+      lines.push(`  ✅ SW 可以访问外部网站（问题出在 B站 专用域名上）`);
+    } else if (resp.ok && txt.length < 200) {
+      lines.push(`  ⚠️ 响应异常短，可能是 SW 返回了错误 JSON`);
+      try { const d = JSON.parse(txt); lines.push(`  错误: ${d.message || d.error}`); } catch {}
+    }
+  } catch (e) {
+    lines.push(`  ❌ SW百度请求失败: ${e.name}: ${e.message}`);
+    lines.push(`  ⚠️ iOS Safari SW 可能完全禁止跨域 fetch`);
+  }
+  lines.push('');
+
   // 5. 测试抖音API
   lines.push(`🎵 抖音API测试:`);
   const douyinUrl = apiUrl('/api/douyin?url=https://v.douyin.com/C9feODQa5j4/');
