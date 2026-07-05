@@ -299,17 +299,14 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         base = self._get_webdav_base(body)
         auth = self._webdav_auth_header(username, password)
-        status, resp_body = self._webdav_request(base, "PROPFIND", "/", auth, extra_headers={"Depth": "0"})
+        # GET 数据文件测试认证（标准HTTP，避免 WebDAV 方法兼容问题）
+        status, _ = self._webdav_request(base, "GET", self.WEBDAV_FILE, auth)
 
-        if status in (207, 200):
-            # 确认不是 XML 错误（坚果云 GET 返回200但内容是错误XML）
-            body_str = resp_body.decode("utf-8", errors="replace") if isinstance(resp_body, bytes) else str(resp_body)
-            if "<s:exception>" in body_str or "<d:error>" in body_str:
-                self._send_json({"ok": False, "error": "服务器地址可能不正确，请检查坚果云WebDAV地址"}, 400)
-                return
-            self._send_json({"ok": True})
-        elif status == 401:
+        # 200=文件存在, 404=首次使用, 非401/403=认证通过
+        if status == 401:
             self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
+        elif status in (200, 404):
+            self._send_json({"ok": True})
         else:
             self._send_json({"ok": False, "error": f"服务器返回 HTTP {status}，请检查地址是否正确"}, 400)
 

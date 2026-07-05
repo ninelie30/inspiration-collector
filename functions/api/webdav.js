@@ -43,26 +43,22 @@ export async function onRequestPost(context) {
     const url = new URL(context.request.url);
     const action = url.pathname.replace('/api/webdav/', '');
 
-    // 测试连接 — PROPFIND 是 WebDAV 标准方法
+    // 测试连接 — GET 数据文件（标准HTTP，避免 Cloudflare Workers 不支持 PROPFIND）
     if (action === 'test') {
       try {
-        const resp = await fetch(base + '/', {
-          method: 'PROPFIND',
-          headers: { Authorization: auth, Depth: '0' },
+        const resp = await fetch(base + FILE_PATH, {
+          method: 'GET',
+          headers: { Authorization: auth },
         });
 
-        if (resp.status === 207 || resp.status === 200) {
-          // 确认不是 XML 错误（坚果云 GET 返回200但内容是错误XML）
-          const text = await resp.text();
-          if (text.includes('<s:exception>') || text.includes('<d:error>')) {
-            return new Response(JSON.stringify({ ok: false, error: '服务器地址可能不正确，请检查坚果云WebDAV地址' }), { status: 400, headers: corsHeaders });
-          }
-          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
-        } else if (resp.status === 401 || resp.status === 403) {
+        // 200=文件存在, 404=首次使用, 任何非401/403都说明认证通过
+        if (resp.status === 401 || resp.status === 403) {
           return new Response(JSON.stringify({ ok: false, error: '账号或密码错误' }), { status: 401, headers: corsHeaders });
-        } else {
-          return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址和账号是否正确` }), { status: 400, headers: corsHeaders });
         }
+        if (resp.status === 200 || resp.status === 404) {
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+        }
+        return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址是否正确` }), { status: 400, headers: corsHeaders });
       } catch (e) {
         return new Response(JSON.stringify({ ok: false, error: `无法连接服务器: ${e.message}` }), { status: 400, headers: corsHeaders });
       }
