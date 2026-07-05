@@ -288,7 +288,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             return 0, str(e).encode()
 
     def _handle_webdav_test(self):
-        """测试坚果云 WebDAV 连接 — 用 GET 避免 PROPFIND 兼容问题"""
+        """测试坚果云 WebDAV 连接"""
         body = self._read_post_body()
         username = body.get("username", "")
         password = body.get("password", "")
@@ -299,13 +299,17 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         base = self._get_webdav_base(body)
         auth = self._webdav_auth_header(username, password)
-        # 用 GET 代替 PROPFIND — 标准 HTTP 方法更可靠
-        status, _ = self._webdav_request(base, "GET", "/", auth)
+        status, resp_body = self._webdav_request(base, "PROPFIND", "/", auth, extra_headers={"Depth": "0"})
 
-        if status == 401:
-            self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
-        elif status < 500:
+        if status in (207, 200):
+            # 确认不是 XML 错误（坚果云 GET 返回200但内容是错误XML）
+            body_str = resp_body.decode("utf-8", errors="replace") if isinstance(resp_body, bytes) else str(resp_body)
+            if "<s:exception>" in body_str or "<d:error>" in body_str:
+                self._send_json({"ok": False, "error": "服务器地址可能不正确，请检查坚果云WebDAV地址"}, 400)
+                return
             self._send_json({"ok": True})
+        elif status == 401:
+            self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
         else:
             self._send_json({"ok": False, "error": f"服务器返回 HTTP {status}，请检查地址是否正确"}, 400)
 

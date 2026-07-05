@@ -6,7 +6,6 @@ const FILE_PATH = '/inspiration-collector/data.json';
 const DIR_PATH = '/inspiration-collector';
 
 function baseUrl(server) {
-  // 去掉尾部斜杠，统一格式
   return (server || DEFAULT_BASE).replace(/\/+$/, '');
 }
 
@@ -15,15 +14,12 @@ function makeAuth(username, password) {
 }
 
 async function ensureDir(base, auth) {
-  // 尝试创建目录，已存在返回405，忽略即可
   try {
     await fetch(base + DIR_PATH, {
       method: 'MKCOL',
       headers: { Authorization: auth },
     });
-  } catch (e) {
-    // 忽略
-  }
+  } catch (e) { /* 目录已存在返回405，忽略 */ }
 }
 
 export async function onRequestPost(context) {
@@ -47,26 +43,28 @@ export async function onRequestPost(context) {
     const url = new URL(context.request.url);
     const action = url.pathname.replace('/api/webdav/', '');
 
-    // 测试连接 — 用 GET 而非 PROPFIND（避免 Cloudflare Workers 对 WebDAV 方法的兼容问题）
+    // 测试连接 — PROPFIND 是 WebDAV 标准方法
     if (action === 'test') {
-      const testUrl = base + '/';
       try {
-        // 策略1: GET 请求（标准 HTTP 方法，最可靠）
-        const resp = await fetch(testUrl, {
-          method: 'GET',
-          headers: { Authorization: auth },
+        const resp = await fetch(base + '/', {
+          method: 'PROPFIND',
+          headers: { Authorization: auth, Depth: '0' },
         });
 
-        if (resp.status === 401 || resp.status === 403) {
-          return new Response(JSON.stringify({ ok: false, error: '账号或密码错误' }), { status: 401, headers: corsHeaders });
-        }
-        // 任何非 401/403 的响应都说明认证通过了
-        if (resp.status < 500) {
+        if (resp.status === 207 || resp.status === 200) {
+          // 确认不是 XML 错误（坚果云 GET 返回200但内容是错误XML）
+          const text = await resp.text();
+          if (text.includes('<s:exception>') || text.includes('<d:error>')) {
+            return new Response(JSON.stringify({ ok: false, error: '服务器地址可能不正确，请检查坚果云WebDAV地址' }), { status: 400, headers: corsHeaders });
+          }
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+        } else if (resp.status === 401 || resp.status === 403) {
+          return new Response(JSON.stringify({ ok: false, error: '账号或密码错误' }), { status: 401, headers: corsHeaders });
+        } else {
+          return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址和账号是否正确` }), { status: 400, headers: corsHeaders });
         }
-        return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址是否正确` }), { status: 400, headers: corsHeaders });
       } catch (e) {
-        return new Response(JSON.stringify({ ok: false, error: `无法连接服务器: ${e.message}。请检查地址是否正确` }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ ok: false, error: `无法连接服务器: ${e.message}` }), { status: 400, headers: corsHeaders });
       }
     }
 
