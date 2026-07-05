@@ -203,32 +203,32 @@ async function fetchBilibiliMeta(url) {
   let bvid = extractBvid(url);
   const debugLog = [];
 
-  // 如果是 b23.tv 短链，直接让服务端解析（服务端跟随重定向提取BV）
-  if (!bvid && url.includes('b23.tv')) {
+  // 如果是 b23.tv / bili2233.cn 短链，让服务端解析出 BV（不调 B站 API）
+  if (!bvid && (url.includes('b23.tv') || url.includes('bili2233.cn'))) {
     try {
-      const resp = await fetchWithTimeout(apiUrl(`/api/bilibili?url=${encodeURIComponent(url)}`), {}, 10000);
+      const resp = await fetchWithTimeout(apiUrl(`/api/bilibili?url=${encodeURIComponent(url)}&resolve=1`), {}, 10000);
       if (resp.ok) {
         const data = await resp.json();
-        if (data.code === 0 && data.data) {
-          bvid = data.data.bvid || extractBvid(data.data.short_link || '');
-          debugLog.push(`短链服务端解析: ✅ 成功 (BV: ${bvid || '?'})`);
-          const meta = buildBilibiliMeta(data.data, url, bvid);
-          meta._debug = debugLog.join('; ');
-          return meta;
+        if (data.bvid) {
+          bvid = data.bvid;
+          debugLog.push(`短链解析: ✅ BV=${bvid}`);
+        } else if (data.error) {
+          debugLog.push(`短链解析: ${data.error}`);
         }
       }
-      debugLog.push(`短链服务端解析: HTTP ${resp.status}`);
     } catch (e) {
-      debugLog.push(`短链服务端解析: ${e.message}`);
+      debugLog.push(`短链解析异常: ${e.message}`);
     }
 
-    // Fallback: 代理抓取HTML提取BV
-    const html = await proxyFetch(url, 5000);
-    if (html) {
-      const m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/);
-      if (m) bvid = m[1];
+    // Fallback: 代理抓取 HTML 提取 BV
+    if (!bvid) {
+      const html = await proxyFetch(url, 5000);
+      if (html) {
+        const m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/);
+        if (m) bvid = m[1];
+      }
+      debugLog.push(`短链HTML解析: ${bvid || '失败'}`);
     }
-    debugLog.push(`短链代理解析: ${bvid || '失败'}`);
   }
 
   if (!bvid) {
@@ -237,13 +237,16 @@ async function fetchBilibiliMeta(url) {
   }
   debugLog.push(`BV号: ${bvid}`);
 
-  // === 方案1: 本地服务器 B站 API 代理（最可靠，绝对URL） ===
+  // === 方案1: Cloudflare 代理 B站 API ===
   try {
     const resp = await fetchWithTimeout(apiUrl(`/api/bilibili?bvid=${bvid}`), {}, 10000);
     if (resp.ok) {
       const data = await resp.json();
-      if (data.code === 0 && data.data) {
-        debugLog.push('方案1(本地代理): ✅ 成功');
+      // 被 B站 限流，跳过直连
+      if (data._blocked) {
+        debugLog.push('方案1(代理): Cloudflare IP 被 B站限流，改用直连');
+      } else if (data.code === 0 && data.data) {
+        debugLog.push('方案1(代理): ✅ 成功');
         const meta = buildBilibiliMeta(data.data, url, bvid);
         meta._debug = debugLog.join('; ');
         return meta;
