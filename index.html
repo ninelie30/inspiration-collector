@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#5B5FEF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>灵感收藏家</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ========== 首页 ========== -->
+    <section class="page page--home active" id="page-home">
+      <header class="page__header">
+        <div class="header__greeting">
+          <p class="header__date" id="home-date"></p>
+          <h1 class="header__title">灵感收藏家</h1>
+        </div>
+        <div class="header__avatar" onclick="switchPage('settings')" data-icon="gear"></div>
+      </header>
+
+      <div class="page__body">
+        <!-- 统计卡片 -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <span class="stat-card__num" id="stat-total">0</span>
+            <span class="stat-card__label">总灵感</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card__num" id="stat-week">0</span>
+            <span class="stat-card__label">本周</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card__num" id="stat-streak">0</span>
+            <span class="stat-card__label">连续天数</span>
+          </div>
+        </div>
+
+        <!-- 每日反思提醒 -->
+        <div class="reminder-card" id="reminder-card">
+          <div class="reminder-card__icon" data-icon="moon"></div>
+          <div class="reminder-card__body">
+            <h3>今日反思未完成</h3>
+            <p>每天3个小问题，记录成长轨迹</p>
+          </div>
+          <button class="reminder-card__btn" onclick="switchPage('reflect')">去完成</button>
+        </div>
+
+        <!-- 最近灵感 -->
+        <div class="section">
+          <div class="section__head">
+            <h2 class="section__title">最近灵感</h2>
+            <button class="section__more" onclick="switchPage('library')">查看全部</button>
+          </div>
+          <div class="inspiration-list" id="home-recent-list">
+            <!-- JS动态生成 -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 快速记录 ========== -->
+    <section class="page page--capture" id="page-capture">
+      <header class="page__header">
+        <h1 class="header__title">快速记录</h1>
+      </header>
+
+      <div class="page__body">
+        <!-- 输入方式选择 -->
+        <div class="capture-tabs">
+          <button class="capture-tab active" data-tab="text">
+            <span class="capture-tab__icon" data-icon="pen"></span>
+            <span>文字</span>
+          </button>
+          <button class="capture-tab" data-tab="voice">
+            <span class="capture-tab__icon" data-icon="mic"></span>
+            <span>语音</span>
+          </button>
+          <button class="capture-tab" data-tab="image">
+            <span class="capture-tab__icon" data-icon="photo"></span>
+            <span>图片</span>
+          </button>
+        </div>
+
+        <!-- 文字输入面板 -->
+        <div class="capture-panel active" id="panel-text">
+          <textarea class="capture-textarea" id="capture-text-input" placeholder="记录此刻的灵感、想法或见闻...&#10;粘贴链接会自动提取网页内容" rows="5"></textarea>
+          <div class="capture-meta">
+            <span class="capture-category-hint" id="text-category-hint">输入内容后将自动推荐分类</span>
+          </div>
+          <!-- 链接预览区域 -->
+          <div class="link-preview" id="link-preview" style="display:none;">
+            <div class="link-preview__loading">
+              <span class="link-preview__spinner"></span>
+              <span id="link-preview-status">正在解析链接内容...</span>
+            </div>
+            <div class="link-preview__card" id="link-preview-card" style="display:none;">
+              <img class="link-preview__img" id="link-preview-img" alt="" onerror="this.style.display='none'">
+              <div class="link-preview__body">
+                <div class="link-preview__source" id="link-preview-source"></div>
+                <h4 class="link-preview__title" id="link-preview-title"></h4>
+                <p class="link-preview__desc" id="link-preview-desc"></p>
+              </div>
+            </div>
+            <div class="link-preview__ai" id="link-preview-ai" style="display:none;">
+              <span class="link-preview__ai-icon" data-icon="sparkle"></span>
+              <span class="link-preview__ai-text">AI 正在分析内容...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 语音输入面板 -->
+        <div class="capture-panel" id="panel-voice">
+          <div class="voice-area">
+            <button class="voice-btn" id="voice-btn">
+              <span class="voice-btn__icon" data-icon="mic"></span>
+            </button>
+            <p class="voice-area__hint" id="voice-hint">点击开始语音输入</p>
+            <div class="voice-wave" id="voice-wave" style="display:none;">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="voice-result" id="voice-result" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- 图片输入面板 -->
+        <div class="capture-panel" id="panel-image">
+          <div class="image-area">
+            <label class="image-upload">
+              <input type="file" accept="image/*" id="image-input" hidden>
+              <div class="image-upload__placeholder">
+                <span class="image-upload__icon" data-icon="camera"></span>
+                <p>点击拍照或选择图片</p>
+              </div>
+            </label>
+            <div class="image-preview" id="image-preview" style="display:none;">
+              <img id="image-preview-img" alt="预览">
+              <button class="image-preview__remove" onclick="removeImage()" data-icon="x" data-icon-size="14"></button>
+            </div>
+            <textarea class="capture-textarea capture-textarea--sm" id="image-desc-input" placeholder="给图片加句描述（可选）..." rows="2"></textarea>
+          </div>
+        </div>
+
+        <!-- 分类选择 -->
+        <div class="category-picker">
+          <label class="category-picker__label">分类</label>
+          <div class="category-chips" id="category-chips">
+            <!-- JS动态生成 -->
+          </div>
+        </div>
+
+        <!-- 保存按钮 -->
+        <button class="save-btn" id="save-btn" onclick="saveInspiration()">
+          <span>保存灵感</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ========== 灵感库 ========== -->
+    <section class="page page--library" id="page-library">
+      <header class="page__header">
+        <div class="header__row">
+          <h1 class="header__title">灵感库</h1>
+          <div class="header__actions">
+            <button class="header__summary-btn" id="export-mode-btn" onclick="toggleExportMode()">
+              <span class="summary-mode-btn__icon" data-icon="export_icon"></span>
+              <span class="summary-mode-btn__text">导出</span>
+            </button>
+            <button class="header__summary-btn" id="summary-mode-btn" onclick="toggleSummaryMode()">
+              <span class="summary-mode-btn__icon" data-icon="sparkle"></span>
+              <span class="summary-mode-btn__text">AI总结</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="page__body">
+        <!-- 搜索框 -->
+        <div class="search-bar">
+          <span class="search-bar__icon" data-icon="search"></span>
+          <input type="text" id="search-input" placeholder="搜索灵感内容...">
+        </div>
+
+        <!-- 分类筛选 -->
+        <div class="filter-chips" id="filter-chips">
+          <button class="filter-chip active" data-filter="all">全部</button>
+          <!-- JS动态生成其余分类 -->
+        </div>
+
+        <!-- 总结模式提示条 -->
+        <div class="summary-banner" id="summary-banner" style="display:none;">
+          <span class="summary-banner__icon" data-icon="sparkle"></span>
+          <span>总结模式已开启 — 点击卡片选择要总结的灵感</span>
+          <button class="summary-banner__close" onclick="toggleSummaryMode()">退出</button>
+        </div>
+
+        <!-- 导出模式提示条 -->
+        <div class="summary-banner summary-banner--export" id="export-banner" style="display:none;">
+          <span class="summary-banner__icon" data-icon="export_icon"></span>
+          <span>导出模式已开启 — 点击卡片选择要导出的灵感</span>
+          <button class="summary-banner__close" onclick="toggleExportMode()">退出</button>
+        </div>
+
+        <!-- 灵感列表 -->
+        <div class="inspiration-list inspiration-list--full" id="library-list">
+          <!-- JS动态生成 -->
+        </div>
+
+        <!-- 空状态 -->
+        <div class="empty-state" id="library-empty" style="display:none;">
+          <span class="empty-state__icon" data-icon="inbox" data-icon-size="48"></span>
+          <p>还没有灵感，去记录第一个吧！</p>
+        </div>
+
+        <!-- 总结结果面板 -->
+        <div class="summary-result" id="summary-result" style="display:none;">
+          <div class="summary-result__head">
+            <h3 class="summary-result__title">AI 总结</h3>
+            <div class="summary-result__head-actions">
+              <button class="summary-result__copy-btn" onclick="copySummaryResult()" title="复制总结" data-icon="copy" data-icon-size="16"></button>
+              <button class="summary-result__close" onclick="closeSummaryResult()" title="关闭" data-icon="x" data-icon-size="16"></button>
+            </div>
+          </div>
+          <div class="summary-result__body" id="summary-result-body"></div>
+          <div class="summary-result__actions">
+            <button class="summary-result__btn summary-result__btn--save" onclick="saveSummaryAsInspiration()" data-icon="book">保存为灵感</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 总结模式底部操作栏 -->
+      <div class="summary-bar" id="summary-bar" style="display:none;">
+        <span class="summary-bar__count" id="summary-bar-count">已选 0 条</span>
+        <button class="summary-bar__btn" id="summary-bar-btn" disabled onclick="generateBatchSummary()">
+          <span class="summary-bar__btn-icon" data-icon="sparkle"></span>
+          生成总结
+        </button>
+      </div>
+
+      <!-- 导出模式底部操作栏 -->
+      <div class="summary-bar summary-bar--export" id="export-bar" style="display:none;">
+        <span class="summary-bar__count" id="export-bar-count">已选 0 条</span>
+        <div class="summary-bar__btns">
+          <button class="summary-bar__btn summary-bar__btn--md" id="export-bar-md-btn" disabled onclick="batchDownloadMarkdown()">
+            <span class="summary-bar__btn-icon" data-icon="document"></span>
+            下载MD
+          </button>
+          <button class="summary-bar__btn summary-bar__btn--obsidian" id="export-bar-obsidian-btn" disabled onclick="batchExportToObsidian()">
+            <span class="summary-bar__btn-icon" data-icon="book"></span>
+            导出到Obsidian
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 每日反思 ========== -->
+    <section class="page page--reflect" id="page-reflect">
+      <header class="page__header">
+        <h1 class="header__title">每日反思</h1>
+      </header>
+
+      <div class="page__body">
+        <div class="reflect-date" id="reflect-date"></div>
+
+        <div class="reflect-questions" id="reflect-questions">
+          <!-- JS动态生成 -->
+        </div>
+
+        <button class="save-btn" id="reflect-save-btn" onclick="saveReflection()">
+          <span>保存今日反思</span>
+        </button>
+
+        <!-- 历史反思 -->
+        <div class="section" style="margin-top:24px;">
+          <h2 class="section__title">历史反思</h2>
+          <div class="reflect-history" id="reflect-history">
+            <!-- JS动态生成 -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 设置 ========== -->
+    <section class="page page--settings" id="page-settings">
+      <header class="page__header">
+        <h1 class="header__title">设置</h1>
+      </header>
+
+      <div class="page__body">
+        <!-- AI 设置 -->
+        <div class="settings-group">
+          <div class="settings-group__title">AI 智能分析</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row__info">
+                <span class="settings-row__label">启用 AI 分析</span>
+                <span class="settings-row__desc">使用 DeepSeek 进行语义分类和内容摘要</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setting-ai-enabled" checked>
+                <span class="switch__slider"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__info">
+                <span class="settings-row__label">启用 AI 批量总结</span>
+                <span class="settings-row__desc">在灵感库中可选中多条灵感，生成智能总结（默认关闭）</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setting-batch-summary">
+                <span class="switch__slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-row settings-row--column">
+              <div class="settings-row__info">
+                <span class="settings-row__label">DeepSeek API Key</span>
+                <span class="settings-row__desc">在 platform.deepseek.com 获取，仅存储在本地</span>
+              </div>
+              <div class="api-key-input">
+                <input type="password" id="setting-api-key" placeholder="sk-xxxxxxxx..." autocomplete="off">
+                <button class="api-key-input__toggle" id="api-key-toggle-btn" onclick="toggleApiKeyVisibility()" data-icon="eye"></button>
+              </div>
+              <div class="api-key-actions">
+                <button class="api-key-actions__btn api-key-actions__btn--test" id="test-api-btn" onclick="testApiConnection()">测试连接</button>
+                <button class="api-key-actions__btn api-key-actions__btn--save" onclick="saveApiKey()">保存</button>
+              </div>
+              <div class="api-key-status" id="api-key-status"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Obsidian 知识库 -->
+        <div class="settings-group">
+          <div class="settings-group__title">Obsidian 知识库</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row__info">
+                <span class="settings-row__label">启用 Obsidian 导出</span>
+                <span class="settings-row__desc">将灵感导出为 Markdown 笔记到 Obsidian（需安装 Obsidian App）</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setting-obsidian-enabled">
+                <span class="switch__slider"></span>
+              </label>
+            </div>
+            <div class="settings-row settings-row--column">
+              <div class="settings-row__info">
+                <span class="settings-row__label">Vault 名称</span>
+                <span class="settings-row__desc">Obsidian 中打开的库名称（区分大小写，留空则用当前打开的库）</span>
+              </div>
+              <input type="text" id="setting-obsidian-vault" placeholder="例如：MyVault" autocomplete="off" style="width:100%;padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--glass-bg);font-size:14px;color:var(--text-primary);margin-top:8px;">
+            </div>
+            <div class="settings-row settings-row--column">
+              <div class="settings-row__info">
+                <span class="settings-row__label">笔记目录</span>
+                <span class="settings-row__desc">笔记存放的文件夹路径（留空则放根目录，如：灵感收藏/每日）</span>
+              </div>
+              <input type="text" id="setting-obsidian-folder" placeholder="例如：灵感收藏" autocomplete="off" style="width:100%;padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--glass-bg);font-size:14px;color:var(--text-primary);margin-top:8px;">
+            </div>
+            <div class="api-key-actions">
+              <button class="api-key-actions__btn api-key-actions__btn--test" onclick="testObsidianUri()">测试连接</button>
+              <button class="api-key-actions__btn api-key-actions__btn--save" onclick="saveObsidianSettings()">保存</button>
+            </div>
+            <div class="api-key-status" id="obsidian-status"></div>
+          </div>
+        </div>
+
+        <!-- 关于 -->
+        <div class="settings-group">
+          <div class="settings-group__title">关于</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row__label">版本</span>
+              <span class="settings-row__value">v2.0</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row__label">AI 引擎</span>
+              <span class="settings-row__value" id="settings-ai-engine">未配置</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row__label">数据存储</span>
+              <span class="settings-row__value">本地浏览器</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row__label">页面地址</span>
+              <span class="settings-row__value" id="settings-page-url" style="font-size:12px;word-break:break-all">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 链接解析诊断 -->
+        <div class="settings-group">
+          <div class="settings-group__title">链接解析诊断</div>
+          <div class="settings-card">
+            <button class="settings-action-btn" onclick="runLinkDiagnostic()"><span class="btn-icon" data-icon="stethoscope"></span> 运行链接解析诊断</button>
+            <div id="diagnostic-result" style="display:none;margin-top:12px;padding:12px;border-radius:12px;background:var(--glass-bg);font-size:13px;line-height:1.8;white-space:pre-wrap;word-break:break-all;"></div>
+          </div>
+          <div class="settings-card">
+            <button class="settings-action-btn settings-action-btn--danger" onclick="forceResetApp()"><span class="btn-icon" data-icon="refresh"></span> 强制重置应用（清除SW+缓存）</button>
+          </div>
+        </div>
+
+        <!-- 数据管理 -->
+        <div class="settings-group">
+          <div class="settings-group__title">数据管理</div>
+          <div class="settings-card">
+            <button class="settings-action-btn" onclick="exportData()"><span class="btn-icon" data-icon="export_icon"></span> 导出全部数据</button>
+            <button class="settings-action-btn settings-action-btn--danger" onclick="clearAllData()"><span class="btn-icon" data-icon="trash"></span> 清空所有数据</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 底部导航 ========== -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-page="home" onclick="switchPage('home')">
+        <span class="nav-item__icon" data-icon="home"></span>
+        <span class="nav-item__label">首页</span>
+      </button>
+      <button class="nav-item" data-page="capture" onclick="switchPage('capture')">
+        <span class="nav-item__icon" data-icon="plus"></span>
+        <span class="nav-item__label">记录</span>
+      </button>
+      <button class="nav-item" data-page="library" onclick="switchPage('library')">
+        <span class="nav-item__icon" data-icon="book"></span>
+        <span class="nav-item__label">灵感库</span>
+      </button>
+      <button class="nav-item" data-page="reflect" onclick="switchPage('reflect')">
+        <span class="nav-item__icon" data-icon="moon"></span>
+        <span class="nav-item__label">反思</span>
+      </button>
+      <button class="nav-item" data-page="settings" onclick="switchPage('settings')">
+        <span class="nav-item__icon" data-icon="gear"></span>
+        <span class="nav-item__label">设置</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Toast提示 -->
+  <div class="toast" id="toast"></div>
+
+  <script src="js/icons.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
