@@ -242,21 +242,21 @@ async function fetchBilibiliMeta(url) {
     const resp = await fetchWithTimeout(apiUrl(`/api/bilibili?bvid=${bvid}`), {}, 10000);
     if (resp.ok) {
       const data = await resp.json();
-      // 被 B站 限流，跳过直连
       if (data._blocked) {
-        debugLog.push('方案1(代理): Cloudflare IP 被 B站限流，改用直连');
+        debugLog.push('方案1(代理): Cloudflare IP 被 B站限流');
       } else if (data.code === 0 && data.data) {
         debugLog.push('方案1(代理): ✅ 成功');
         const meta = buildBilibiliMeta(data.data, url, bvid);
         meta._debug = debugLog.join('; ');
         return meta;
+      } else {
+        debugLog.push(`方案1(代理): code=${data.code}`);
       }
-      debugLog.push(`方案1(本地代理): code=${data.code}`);
     } else {
-      debugLog.push(`方案1(本地代理): HTTP ${resp.status}`);
+      debugLog.push(`方案1(代理): HTTP ${resp.status}`);
     }
   } catch (e) {
-    debugLog.push(`方案1(本地代理): ${e.message}`);
+    debugLog.push(`方案1(代理): ${e.message}`);
   }
 
   // === 方案2: 直连B站 API ===
@@ -290,11 +290,12 @@ async function fetchBilibiliMeta(url) {
   debugLog.push(`方案3(公共JSON代理): ${jsonData ? 'code!=' + jsonData.code : '无响应'}`);
 
   // === 方案4: 抓取B站视频页HTML ===
-  const html = await proxyFetch(`https://www.bilibili.com/video/${bvid}`, 8000);
+  const html = await proxyFetch(`https://www.bilibili.com/video/${bvid}`, 10000);
   if (html) {
     if (isErrorPage(html)) {
       debugLog.push('方案4(HTML): 错误页');
     } else {
+      // 尝试 __INITIAL_STATE__
       const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{[^<]+\});/);
       if (stateMatch) {
         try {
@@ -309,13 +310,35 @@ async function fetchBilibiliMeta(url) {
         } catch {}
       }
 
+      // 尝试 OG meta 标签
       const meta = parseHtmlMeta(html, url);
       if (meta && !isErrorPage('', meta.title)) {
         debugLog.push('方案4(OG标签): ✅ 成功');
         meta._debug = debugLog.join('; ');
         return meta;
       }
-      debugLog.push('方案4(OG标签): 无有效数据');
+
+      // 最后尝试：从 <title> 提取视频标题（B站格式：xxx_哔哩哔哩_bilibili）
+      const tStart = html.indexOf('<title>');
+      const tEnd = html.indexOf('</title>', tStart);
+      if (tStart !== -1 && tEnd !== -1) {
+        let rawTitle = html.slice(tStart + 7, tEnd)
+          .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+          .replace(/&#x27;/g, "'").replace(/&quot;/g, '"');
+        rawTitle = rawTitle.replace(/[_-]*(哔哩哔哩|bilibili)[_-]*/gi, '').trim();
+        if (rawTitle.length > 2) {
+          debugLog.push('方案4(<title>): ✅ 提取标题');
+          return {
+            title: rawTitle,
+            url: url,
+            description: '',
+            image: null,
+            source: 'bilibili.com',
+            _debug: debugLog.join('; ')
+          };
+        }
+      }
+      debugLog.push('方案4: 无法提取有效数据');
     }
   } else {
     debugLog.push('方案4(HTML): 无响应');
