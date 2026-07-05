@@ -1585,6 +1585,7 @@ function renderCard(item, opts = {}) {
 
   return `
     <div class="inspiration-card ${selectable ? 'selectable' : ''} ${selectable && selectedIds.has(item.id) ? 'selected' : ''}" data-id="${item.id}" onclick="${selectable ? `toggleCardSelection('${item.id}')` : ''}">
+      ${item.note ? '<div class="inspiration-card__note-indicator">📝</div>' : ''}
       <div class="inspiration-card__type ${cat.cls}-bar"></div>
       <div class="inspiration-card__head">
         <span class="inspiration-card__category ${cat.cls}">${glassIcon(cat.icon, 14)} ${cat.name}${item.isSummary ? ' · 总结' : ''}</span>
@@ -1907,6 +1908,103 @@ async function saveInspiration() {
   toast('灵感已保存');
   resetCapturePage();
   setTimeout(() => switchPage('home'), 600);
+}
+
+// ---------- 长按备注 ----------
+let _noteModalId = null;
+let _longPressTimer = null;
+const LONG_PRESS_MS = 600;
+
+function showNoteModal(id) {
+  const data = getData();
+  const item = data.find(d => d.id === id);
+  if (!item) return;
+  _noteModalId = id;
+  const ctx = document.getElementById('note-modal-context');
+  const ta = document.getElementById('note-modal-textarea');
+  const delBtn = document.getElementById('note-modal-delete-btn');
+  const preview = (item.content || '').slice(0, 60);
+  ctx.textContent = `“${preview}${preview.length >= 60 ? '...' : ''}”`;
+  ta.value = item.note || '';
+  delBtn.style.display = item.note ? '' : 'none';
+  document.getElementById('note-modal-overlay').style.display = 'flex';
+  ta.focus();
+}
+
+function closeNoteModal() {
+  document.getElementById('note-modal-overlay').style.display = 'none';
+  _noteModalId = null;
+}
+
+function saveNote() {
+  if (!_noteModalId) return;
+  const note = document.getElementById('note-modal-textarea').value.trim();
+  let data = getData();
+  const item = data.find(d => d.id === _noteModalId);
+  if (!item) return;
+  item.note = note || undefined;
+  if (!note) delete item.note;
+  saveData(data);
+  closeNoteModal();
+  triggerSyncPush();
+  renderHome();
+  renderLibrary();
+  toast(note ? '备注已保存' : '备注已清除');
+}
+
+function deleteNote() {
+  if (!_noteModalId) return;
+  let data = getData();
+  const item = data.find(d => d.id === _noteModalId);
+  if (!item) return;
+  delete item.note;
+  saveData(data);
+  closeNoteModal();
+  triggerSyncPush();
+  renderHome();
+  renderLibrary();
+  toast('备注已删除');
+}
+
+// 卡片长按事件绑定（事件委托）
+function initCardLongPress() {
+  document.addEventListener('touchstart', e => {
+    if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+    const card = e.target.closest('.inspiration-card');
+    if (!card) return;
+    const id = card.dataset.id;
+    if (!id) return;
+    _longPressTimer = setTimeout(() => {
+      _longPressTimer = null;
+      if (navigator.vibrate) navigator.vibrate(15);
+      showNoteModal(id);
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+  });
+  document.addEventListener('touchmove', () => {
+    if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+  });
+
+  // 桌面端右键菜单也打开备注
+  document.addEventListener('contextmenu', e => {
+    const card = e.target.closest('.inspiration-card');
+    if (!card) return;
+    const id = card.dataset.id;
+    if (!id) return;
+    e.preventDefault();
+    showNoteModal(id);
+  });
+}
+
+// 页面加载时初始化
+if (typeof initCardLongPress === 'function') {
+  document.addEventListener('DOMContentLoaded', initCardLongPress);
+} else {
+  // 直接调用（sync.js 之后 app.js 之前加载）
+  setTimeout(initCardLongPress, 100);
 }
 
 // ---------- 删除 / 复制 / 分享 ----------

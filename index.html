@@ -524,6 +524,23 @@
   <!-- Toast提示 -->
   <div class="toast" id="toast"></div>
 
+  <!-- 备注编辑弹窗 -->
+  <div class="note-modal-overlay" id="note-modal-overlay" style="display:none;" onclick="if(event.target===this)closeNoteModal()">
+    <div class="note-modal">
+      <div class="note-modal__header">
+        <span class="note-modal__title">📝 编辑备注</span>
+        <button class="note-modal__close" onclick="closeNoteModal()">✕</button>
+      </div>
+      <div class="note-modal__label" id="note-modal-context"></div>
+      <textarea class="note-modal__textarea" id="note-modal-textarea" placeholder="写点备注..."></textarea>
+      <div class="note-modal__actions">
+        <button class="note-modal__btn note-modal__btn--delete" id="note-modal-delete-btn" style="display:none;" onclick="deleteNote()">删除备注</button>
+        <button class="note-modal__btn note-modal__btn--cancel" onclick="closeNoteModal()">取消</button>
+        <button class="note-modal__btn note-modal__btn--save" onclick="saveNote()">保存</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/icons.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/app.js"></script>

@@ -2260,3 +2260,134 @@ body::after {
   margin-top: 8px;
   line-height: 1.6;
 }
+
+/* ===== 备注指示器 ===== */
+.inspiration-card__note-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  z-index: 1;
+}
+
+/* ===== 备注编辑弹窗 ===== */
+.note-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s;
+}
+
+.note-modal {
+  background: var(--card);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 500px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 20px 32px;
+  animation: slideUp 0.25s ease-out;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+}
+
+.note-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.note-modal__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.note-modal__close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--r-xs);
+}
+
+.note-modal__label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.note-modal__textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--glass-bg);
+  resize: vertical;
+  outline: none;
+}
+
+.note-modal__textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.note-modal__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.note-modal__btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.note-modal__btn--save {
+  background: var(--primary);
+  color: #fff;
+}
+
+.note-modal__btn--save:active {
+  opacity: 0.85;
+}
+
+.note-modal__btn--delete {
+  background: var(--glass-bg);
+  color: #FF6B6B;
+  border: 1px solid var(--border);
+}
+
+.note-modal__btn--cancel {
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
