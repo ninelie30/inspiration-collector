@@ -2484,6 +2484,36 @@ async function runLinkDiagnostic() {
   }
   lines.push('');
 
+  // 4b. 测试 SW 代理访问 B站视频页面（非 API 域名）
+  lines.push(`🔀 SW 代理测试（B站页面）:`);
+  const swPageUrl = `/sw-proxy/${encodeURIComponent('https://www.bilibili.com/video/BV1hAEG6eEDk')}`;
+  lines.push(`  目标: www.bilibili.com`);
+  try {
+    const ctrl = new AbortController();
+    const tmr = setTimeout(() => ctrl.abort(), 12000);
+    const resp = await fetch(swPageUrl, { signal: ctrl.signal, cache: 'no-store' });
+    clearTimeout(tmr);
+    const txt = await resp.text();
+    const hasTitle = txt.includes('<title>');
+    const hasInitState = txt.includes('__INITIAL_STATE__');
+    const titleMatch = txt.match(/<title>([^<]*)<\/title>/);
+    lines.push(`  HTTP状态: ${resp.status}`);
+    lines.push(`  HTML大小: ${txt.length} 字节`);
+    lines.push(`  <title>标签: ${hasTitle ? '✅' : '❌'}`);
+    lines.push(`  __INITIAL_STATE__: ${hasInitState ? '✅' : '❌'}`);
+    if (titleMatch) {
+      lines.push(`  页面标题: ${titleMatch[1].substring(0, 60)}`);
+    }
+    if (resp.ok && hasTitle && hasInitState) {
+      lines.push(`  ✅ SW可正常访问 B站页面，可提取视频信息`);
+    } else if (resp.ok && !hasTitle) {
+      lines.push(`  ⚠️ 可能被重定向或返回非正常页面`);
+    }
+  } catch (e) {
+    lines.push(`  ❌ SW页面请求失败: ${e.name}: ${e.message}`);
+  }
+  lines.push('');
+
   // 5. 测试抖音API
   lines.push(`🎵 抖音API测试:`);
   const douyinUrl = apiUrl('/api/douyin?url=https://v.douyin.com/C9feODQa5j4/');
