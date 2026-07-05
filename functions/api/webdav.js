@@ -47,27 +47,24 @@ export async function onRequestPost(context) {
     const url = new URL(context.request.url);
     const action = url.pathname.replace('/api/webdav/', '');
 
-    // 测试连接
+    // 测试连接 — 用 GET 而非 PROPFIND（避免 Cloudflare Workers 对 WebDAV 方法的兼容问题）
     if (action === 'test') {
       const testUrl = base + '/';
       try {
+        // 策略1: GET 请求（标准 HTTP 方法，最可靠）
         const resp = await fetch(testUrl, {
-          method: 'PROPFIND',
-          headers: {
-            Authorization: auth,
-            Depth: '0',
-          },
+          method: 'GET',
+          headers: { Authorization: auth },
         });
 
-        if (resp.status === 207 || resp.status === 200) {
-          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
-        } else if (resp.status === 401 || resp.status === 403) {
+        if (resp.status === 401 || resp.status === 403) {
           return new Response(JSON.stringify({ ok: false, error: '账号或密码错误' }), { status: 401, headers: corsHeaders });
-        } else if (resp.status === 405) {
-          return new Response(JSON.stringify({ ok: false, error: '服务器地址不正确，请检查坚果云WebDAV地址（设置→安全选项→第三方应用管理）' }), { status: 400, headers: corsHeaders });
-        } else {
-          return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址和账号是否正确` }), { status: 400, headers: corsHeaders });
         }
+        // 任何非 401/403 的响应都说明认证通过了
+        if (resp.status < 500) {
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+        }
+        return new Response(JSON.stringify({ ok: false, error: `服务器返回 HTTP ${resp.status}，请检查地址是否正确` }), { status: 400, headers: corsHeaders });
       } catch (e) {
         return new Response(JSON.stringify({ ok: false, error: `无法连接服务器: ${e.message}。请检查地址是否正确` }), { status: 400, headers: corsHeaders });
       }
