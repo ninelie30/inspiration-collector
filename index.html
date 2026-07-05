@@ -379,17 +379,18 @@
               </div>
 
               <!-- 测试连接 + 保存 -->
-              <div style="display:flex;gap:8px;margin-top:12px;">
-                <button class="settings-action-btn" id="webdav-test-btn" onclick="testWebDAVConnection()" style="flex:1;">
+              <div class="api-key-actions" style="margin-top:12px;">
+                <button class="api-key-actions__btn api-key-actions__btn--test" id="webdav-test-btn" onclick="testWebDAVConnection()">
                   测试连接
                 </button>
-                <button class="settings-action-btn" onclick="saveWebDAVSettings()" style="flex:1;">
+                <button class="api-key-actions__btn api-key-actions__btn--save" onclick="saveWebDAVSettings()">
                   保存
                 </button>
               </div>
+              <div class="api-key-status" id="webdav-status"></div>
 
               <!-- 自动同步 -->
-              <div class="settings-row" style="border-top:1px solid var(--border);margin-top:12px;">
+              <div class="settings-row" style="border-top:1px solid var(--border);margin-top:16px;">
                 <div class="settings-row__info">
                   <span class="settings-row__label">自动同步</span>
                   <span class="settings-row__desc">数据变更时自动同步到坚果云（推荐开启）</span>
@@ -401,11 +402,11 @@
               </div>
 
               <!-- 手动同步 + 断开 -->
-              <div style="display:flex;gap:8px;margin-top:12px;">
-                <button class="settings-action-btn" onclick="syncNow()" style="flex:1;">
+              <div class="api-key-actions" style="margin-top:12px;">
+                <button class="api-key-actions__btn api-key-actions__btn--save" onclick="syncNow()">
                   立即同步
                 </button>
-                <button class="settings-action-btn settings-action-btn--danger" onclick="disconnectSync()" style="flex:1;">
+                <button class="api-key-actions__btn api-key-actions__btn--test" onclick="disconnectSync()" style="color:#EF4444;border-color:#EF4444;">
                   断开同步
                 </button>
               </div>

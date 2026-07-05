@@ -362,6 +362,7 @@ async function testWebDAVConnection() {
   }
 
   updateSyncStatus('正在连接...', true);
+  setWebdavStatus('...', 'info');
   const testBtn = document.getElementById('webdav-test-btn');
   if (testBtn) {
     testBtn.disabled = true;
@@ -376,6 +377,7 @@ async function testWebDAVConnection() {
       settings.enabled = true;
       saveSyncSettings(settings);
       updateSyncStatus('已连接');
+      setWebdavStatus('✅ 连接成功', 'success');
       toast('坚果云连接成功！');
 
       // 首次同步
@@ -385,11 +387,13 @@ async function testWebDAVConnection() {
     } else {
       syncState.connected = false;
       updateSyncStatus('连接失败: ' + (result.error || '未知错误'));
+      setWebdavStatus('❌ ' + (result.error || '连接失败'), 'error');
       toast('连接失败: ' + (result.error || '请检查账号密码'));
     }
   } catch (e) {
     syncState.connected = false;
     updateSyncStatus('连接失败: ' + e.message);
+    setWebdavStatus('❌ ' + e.message, 'error');
     toast('连接失败: ' + e.message);
   } finally {
     if (testBtn) {
@@ -421,6 +425,14 @@ function disconnectSync() {
 
   updateSyncUI();
   toast('已断开坚果云同步');
+}
+
+// WebDAV 按钮下方的状态指示
+function setWebdavStatus(text, cls) {
+  const el = document.getElementById('webdav-status');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'api-key-status api-key-status--' + cls;
 }
 
 function updateSyncStatus(status, isWorking) {
