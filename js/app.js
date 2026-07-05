@@ -2549,7 +2549,7 @@ function init() {
   if ('serviceWorker' in navigator) {
     // 强制清理旧版SW和缓存（解决旧SW拦截API请求的问题）
     navigator.serviceWorker.getRegistrations().then(async (registrations) => {
-      const CURRENT_SW_VERSION = 'v19';
+      const CURRENT_SW_VERSION = 'v22';
       const storedVersion = localStorage.getItem('sw_version');
 
       // 如果版本不匹配，注销所有旧SW并清除缓存

@@ -1,5 +1,5 @@
 // 灵感收藏家 - Service Worker
-const CACHE_NAME = 'inspiration-collector-v21';
+const CACHE_NAME = 'inspiration-collector-v22';
 const ASSETS = [
   '/',
   '/index.html',

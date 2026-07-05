@@ -56,23 +56,47 @@ export async function onRequestGet(context) {
 }
 
 // 解析 b23.tv / bili2233.cn 短链接 → 返回 BV号
+// 多策略解析，适配 Cloudflare Workers 环境
 async function resolveShortLink(shortUrl) {
   const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-  // 策略1: HTTP 重定向
+  // 确保 URL 有协议前缀
+  let url = shortUrl.trim();
+  if (!url.startsWith('http')) {
+    url = 'https://' + url;
+  }
+
+  let html = '';
+
+  // === 策略1: follow 重定向，从最终 URL 提取 BV ===
   try {
-    const resp = await fetch(shortUrl, {
-      headers: { "User-Agent": ua, "Accept": "text/html,application/xhtml+xml,*/*" },
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": "https://www.bilibili.com/",
+      },
       redirect: "follow",
     });
-    const m = resp.url.match(/(BV[bB0-9a-zA-Z]{8,})/);
+    const finalUrl = resp.url || '';
+    const m = finalUrl.match(/(BV[bB0-9a-zA-Z]{8,})/);
     if (m) return m[1];
-  } catch (e) {}
+    // 读取 HTML 供后续策略使用
+    html = await resp.text();
+    html = html.substring(0, 30000); // 限制大小
+  } catch (e) {
+    // follow 失败，尝试 manual
+  }
 
-  // 策略2: manual redirect
+  // === 策略2: manual 重定向，从 Location header 提取 ===
   try {
-    const resp = await fetch(shortUrl, {
-      headers: { "User-Agent": ua, "Accept": "text/html,*/*" },
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent": ua,
+        "Accept": "text/html,*/*",
+        "Referer": "https://www.bilibili.com/",
+      },
       redirect: "manual",
     });
     if (resp.status >= 300 && resp.status < 400) {
@@ -80,10 +104,43 @@ async function resolveShortLink(shortUrl) {
       const m = loc.match(/(BV[bB0-9a-zA-Z]{8,})/);
       if (m) return m[1];
     }
-    const html = await resp.text();
-    const m = html.match(/(BV[bB0-9a-zA-Z]{8,})/);
-    if (m) return m[0];
+    if (!html) {
+      html = await resp.text();
+      html = html.substring(0, 30000);
+    }
   } catch (e) {}
+
+  if (!html) return null;
+
+  // === 策略3: meta refresh 跳转 ===
+  let m = html.match(/url=([^"'\s>]*bilibili[^"'\s>]*)/i);
+  if (m) {
+    const bv = m[1].match(/(BV[bB0-9a-zA-Z]{8,})/);
+    if (bv) return bv[1];
+  }
+
+  // === 策略4: JS location 跳转 ===
+  m = html.match(/location\.(?:href|replace)\s*=\s*["']([^"']*bilibili[^"']*)["']/i);
+  if (m) {
+    const bv = m[1].match(/(BV[bB0-9a-zA-Z]{8,})/);
+    if (bv) return bv[1];
+  }
+
+  // === 策略5: HTML 全文搜索 bilibili.com/video/BV ===
+  m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/i);
+  if (m) return m[1];
+
+  // === 策略6: JSON 中的 bvid 字段 ===
+  m = html.match(/"bvid"\s*:\s*"(BV[bB0-9a-zA-Z]{8,})"/i);
+  if (m) return m[1];
+
+  // === 策略7: URL 参数中的 bvid ===
+  m = html.match(/[?&]bvid=(BV[bB0-9a-zA-Z]{8,})/i);
+  if (m) return m[1];
+
+  // === 策略8: 任意位置的 BV号（最后手段，可能误匹配） ===
+  m = html.match(/(BV[bB0-9a-zA-Z]{10,})/);
+  if (m) return m[1];
 
   return null;
 }
