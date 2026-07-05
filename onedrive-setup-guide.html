@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneDrive 云同步配置指南 - 灵感收藏家</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      line-height: 1.8;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 28px;
+      color: #58a6ff;
+      margin-bottom: 8px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #30363d;
+    }
+    h2 {
+      font-size: 22px;
+      color: #7ee787;
+      margin: 32px 0 12px;
+    }
+    h3 {
+      font-size: 17px;
+      color: #d2a8ff;
+      margin: 20px 0 8px;
+    }
+    p { margin: 8px 0; }
+    .step {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    .step-num {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      line-height: 28px;
+      text-align: center;
+      background: #58a6ff;
+      color: #fff;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    .highlight {
+      background: #1c2128;
+      border-left: 3px solid #f0883e;
+      padding: 12px 16px;
+      margin: 12px 0;
+      border-radius: 0 8px 8px 0;
+      color: #f0883e;
+    }
+    .tip {
+      background: #0d2818;
+      border-left: 3px solid #7ee787;
+      padding: 12px 16px;
+      margin: 12px 0;
+      border-radius: 0 8px 8px 0;
+      color: #7ee787;
+    }
+    code {
+      background: #30363d;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #f0883e;
+      word-break: break-all;
+    }
+    .code-block {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      color: #c9d1d9;
+      margin: 12px 0;
+      overflow-x: auto;
+      word-break: break-all;
+    }
+    .redirect-uri-box {
+      background: #1c2128;
+      border: 2px dashed #58a6ff;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      margin: 12px 0;
+    }
+    .redirect-uri-box code {
+      font-size: 15px;
+      background: none;
+      color: #58a6ff;
+    }
+    .btn {
+      display: inline-block;
+      background: #238636;
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      margin: 8px 0;
+    }
+    .summary {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .summary h3 { margin-top: 0; }
+    .faq {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+    .faq q {
+      font-weight: bold;
+      color: #d2a8ff;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .faq q:before { content: "Q: "; }
+    .faq a { color: #58a6ff; text-decoration: none; }
+    ol { padding-left: 24px; margin: 8px 0; }
+    ol li { margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <h1>OneDrive 云同步配置指南</h1>
+  <p>只需一次性注册微软应用（获取 Client ID），之后所有设备用微软账号一键登录即可自动同步。</p>
+
+  <div class="highlight">
+    <strong>为什么用 OneDrive？</strong><br>
+    1. 国内可直连（graph.microsoft.com 不需要代理）<br>
+    2. 纯前端同步，不需要后端服务器<br>
+    3. 数据存在你自己的 OneDrive 应用文件夹中，隐私安全<br>
+    4. 微软账号免费，5GB 空间足够用
+  </div>
+
+  <h2>第一步：注册微软应用</h2>
+  <p>这一步只需要做一次，获取一个 Client ID。</p>
+
+  <div class="step">
+    <span class="step-num">1</span><strong> 打开 Azure 应用注册页面</strong>
+    <p>访问 <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" style="color:#58a6ff;">portal.azure.com → 应用注册</a></p>
+    <p>用你的微软账号（@outlook.com / @hotmail.com / @live.com）登录</p>
+    <p>如果提示没有 Azure 订阅，没关系——注册应用不需要订阅，直接继续</p>
+  </div>
+
+  <div class="step">
+    <span class="step-num">2</span><strong> 点击「新建注册」</strong>
+    <p>在页面顶部点击「+ 新建注册」</p>
+  </div>
+
+  <div class="step">
+    <span class="step-num">3</span><strong> 填写应用信息</strong>
+    <ul style="padding-left:20px;margin:8px 0;">
+      <li><strong>名称</strong>：随便填，比如「灵感收藏家」</li>
+      <li><strong>支持的帐户类型</strong>：选择 <code>任何组织目录中的帐户和个人 Microsoft 帐户</code>（第三个选项，最通用）</li>
+      <li><strong>重定向 URI</strong>：
+        <ul>
+          <li>平台选 <code>单页应用程序 (SPA)</code></li>
+          <li>URI 填你的应用访问地址（见下方说明）</li>
+        </ul>
+      </li>
+    </ul>
+
+    <div class="redirect-uri-box">
+      <strong>重定向 URI 填什么？</strong><br><br>
+      <p>就是你在浏览器打开应用时的地址（注意末尾要有 <code>/</code>）：</p>
+      <p>本地开发：<code>http://localhost:8080/</code></p>
+      <p>Cloudflare 部署：<code>https://你的域名.pages.dev/</code></p>
+      <br>
+      <p style="font-size:13px;color:#8b949e;">⚠️ 末尾的 <code>/</code> 必须有！可以添加多个 URI（本地+线上都配上），每行一个</p>
+    </div>
+
+    <p>填完后点击「注册」</p>
+  </div>
+
+  <div class="step">
+    <span class="step-num">4</span><strong> 复制 Client ID（应用程序 ID）</strong>
+    <p>注册成功后，在「概述」页面找到 <code>应用程序(客户端) ID</code></p>
+    <p>这是一串类似 <code>12345678-abcd-efgh-ijkl-1234567890ab</code> 的字符串</p>
+    <div class="tip">把这个 ID 复制保存好，稍后要填到应用设置中</div>
+  </div>
+
+  <div class="step">
+    <span class="step-num">5</span><strong> 添加 API 权限</strong>
+    <ol>
+      <li>在左侧菜单点击「API 权限」</li>
+      <li>点击「+ 添加权限」</li>
+      <li>选择「Microsoft Graph」</li>
+      <li>选择「委托的权限」(Delegated permissions)</li>
+      <li>搜索 <code>AppFolder</code>，勾选 <code>Files.ReadWrite.AppFolder</code></li>
+      <li>搜索 <code>offline_access</code>，勾选 <code>offline_access</code></li>
+      <li>点击「添加权限」</li>
+    </ol>
+    <div class="tip">两个权限都要勾：<code>Files.ReadWrite.AppFolder</code>（读写应用文件夹）+ <code>offline_access</code>（保持登录）</div>
+  </div>
+
+  <div class="step">
+    <span class="step-num">6</span><strong> 确认设置（SPA 平台无需额外配置）</strong>
+    <p>如果你选的是 <code>单页应用程序 (SPA)</code> 平台，无需设置「允许公共客户端流」—— SPA 本身就是公共客户端。</p>
+    <div class="tip">如果你的应用注册时只能选 Web 平台（老版界面），则需在「身份验证」→「高级设置」→「允许公共客户端流」选「是」</div>
+  </div>
+
+  <h2>第二步：在应用中配置</h2>
+
+  <div class="step">
+    <span class="step-num">1</span><strong> 填入 Client ID</strong>
+    <p>在灵感收藏家应用中：设置 → ☁️ 云同步 → 启用 → 填入 Client ID → 点「保存」</p>
+  </div>
+
+  <div class="step">
+    <span class="step-num">2</span><strong> 连接 OneDrive</strong>
+    <p>点「连接 OneDrive」按钮 → 跳转到微软登录页 → 登录并授权</p>
+    <p>授权后会自动跳回应用，显示已连接</p>
+  </div>
+
+  <div class="step">
+    <span class="step-num">3</span><strong> 在其他设备上同步</strong>
+    <p>在其他设备/浏览器打开应用 → 设置 → 启用云同步 → 填入相同的 Client ID → 连接 OneDrive</p>
+    <p>登录同一个微软账号后，数据自动同步</p>
+  </div>
+
+  <div class="summary">
+    <h3>同步说明</h3>
+    <ul style="padding-left:20px;margin:8px 0;">
+      <li>数据存储在 OneDrive 的 <code>应用/灵感收藏家</code> 文件夹下（一个 JSON 文件）</li>
+      <li>数据变更后 3 秒自动上传（防抖）</li>
+      <li>每 60 秒自动拉取一次云端更新</li>
+      <li>多设备同时编辑时，按时间戳合并，不会丢数据</li>
+      <li>删除操作会同步到所有设备</li>
+      <li>API Key 等敏感设置不同步，各设备独立配置</li>
+      <li>离线时正常使用，联网后自动同步</li>
+    </ul>
+  </div>
+
+  <h2>常见问题</h2>
+
+  <div class="faq">
+    <q>登录后提示「重定向 URI 不匹配」</q>
+    <p>检查 Azure 应用中注册的重定向 URI 是否和当前页面地址完全一致（包括 http/https、端口号、路径）。在 Azure 的「身份验证」页面可以添加多个 URI。</p>
+  </div>
+
+  <div class="faq">
+    <q>手机上能用吗？</q>
+    <p>可以。但手机必须通过 HTTPS 访问应用（如 Cloudflare Pages 部署的地址），因为微软 OAuth 要求 HTTPS（localhost 除外）。所以手机上用之前需要先部署到 Cloudflare Pages。</p>
+  </div>
+
+  <div class="faq">
+    <q>OneDrive 在国内会被墙吗？</q>
+    <p>不会。<code>graph.microsoft.com</code> 和 <code>login.microsoftonline.com</code> 在国内都可以正常访问，不需要代理。OneDrive 个人版的同步功能在国内正常可用。</p>
+  </div>
+
+  <div class="faq">
+    <q>数据安全吗？</q>
+    <p>数据存在你自己的 OneDrive 中，应用只能访问自己的专用文件夹（AppFolder），无法读取你的其他文件。Client ID 是公开的，不构成安全风险——PKCE 流程保证了只有你的应用能用这个 ID。</p>
+  </div>
+
+  <div class="faq">
+    <q>换了微软账号怎么办？</q>
+    <p>断开同步 → 重新连接 → 登录新账号即可。但注意：不同账号的 OneDrive 数据不互通，切换账号后云端数据是新账号的。</p>
+  </div>
+
+  <div class="faq">
+    <q>注册应用收费吗？</q>
+    <p>完全免费。Azure AD 应用注册不需要任何订阅，个人微软账号即可注册。</p>
+  </div>
+
+  <h2>Cloudflare Pages 部署（手机使用需要）</h2>
+  <p>手机上使用 OneDrive 同步需要 HTTPS 环境，Cloudflare Pages 免费提供：</p>
+
+  <div class="step">
+    <span class="step-num">1</span> 登录 <a href="https://dash.cloudflare.com" target="_blank" style="color:#58a6ff;">dash.cloudflare.com</a>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span> Workers & Pages → Create application → Pages → Connect to Git
+  </div>
+  <div class="step">
+    <span class="step-num">3</span> 选择 GitHub 仓库 <code>ninelie30/inspiration-collector</code>
+  </div>
+  <div class="step">
+    <span class="step-num">4</span> Build command 留空，Build output directory 留空，点 Deploy
+  </div>
+  <div class="step">
+    <span class="step-num">5</span> 部署完成后获得 <code>https://xxx.pages.dev</code> 地址
+  </div>
+  <div class="step">
+    <span class="step-num">6</span> 把这个地址添加到 Azure 应用的重定向 URI 中
+  </div>
+
+  <div class="tip" style="margin-top:24px;">
+    配置完成后，在任何设备打开应用 → 设置 → 启用云同步 → 填 Client ID → 连接 OneDrive，数据就自动同步了！
+  </div>
+</body>
+</html>

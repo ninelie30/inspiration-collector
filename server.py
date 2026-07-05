@@ -18,6 +18,7 @@ import os
 import sys
 import re
 import ssl
+import base64
 
 PORT = int(os.environ.get("PORT", 8080))
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -60,6 +61,33 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
+    def do_POST(self):
+        """Handle POST requests (sync API + WebDAV proxy)"""
+        parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/api/sync/create":
+            self._handle_sync_create()
+            return
+
+        if parsed.path == "/api/sync":
+            self._handle_sync_push()
+            return
+
+        # === 坚果云 WebDAV 代理 ===
+        if parsed.path == "/api/webdav/test":
+            self._handle_webdav_test()
+            return
+
+        if parsed.path == "/api/webdav/pull":
+            self._handle_webdav_pull()
+            return
+
+        if parsed.path == "/api/webdav/push":
+            self._handle_webdav_push()
+            return
+
+        self._send_json({"error": "Not found"}, 404)
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
 
@@ -83,16 +111,301 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_proxy(parsed)
             return
 
+        # === API: 云同步 (拉取) ===
+        if parsed.path == "/api/sync":
+            self._handle_sync_pull(parsed)
+            return
+
         # === 静态文件 ===
         super().do_GET()
 
+    # === 云同步：本地JSON文件存储 ===
+    SYNC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sync_data.json")
+
+    def _load_sync_data(self):
+        """读取本地同步数据"""
+        try:
+            with open(self.SYNC_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _save_sync_data(self, data):
+        """保存同步数据"""
+        with open(self.SYNC_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+
+    @staticmethod
+    def _gen_sync_code():
+        import random, string
+        chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+        return "".join(random.choice(chars) for _ in range(6))
+
+    def _handle_sync_create(self):
+        """创建新同步码"""
+        code = self._gen_sync_code()
+        data = self._load_sync_data()
+        import time
+        data[code] = {
+            "inspirations": [],
+            "reflections": [],
+            "streak": {"count": 0, "lastDate": None},
+            "deletedIds": [],
+            "lastModified": int(time.time() * 1000),
+        }
+        self._save_sync_data(data)
+        result = {"code": code, **data[code]}
+        self._send_json(result)
+
+    def _handle_sync_pull(self, parsed):
+        """拉取同步数据"""
+        qs = urllib.parse.parse_qs(parsed.query)
+        code = qs.get("code", [None])[0]
+        if not code:
+            self._send_json({"error": "缺少同步码"}, 400)
+            return
+
+        data = self._load_sync_data()
+        if code not in data:
+            self._send_json({"error": "同步码不存在"}, 404)
+            return
+
+        result = {"code": code, **data[code]}
+        self._send_json(result)
+
+    def _handle_sync_push(self):
+        """推送同步数据（合并后保存）"""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length).decode("utf-8") if content_length else "{}"
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            self._send_json({"error": "无效的JSON"}, 400)
+            return
+
+        code = payload.get("code")
+        if not code:
+            self._send_json({"error": "缺少同步码"}, 400)
+            return
+
+        import time
+        data = self._load_sync_data()
+        existing = data.get(code, {
+            "inspirations": [],
+            "reflections": [],
+            "streak": {"count": 0, "lastDate": None},
+            "deletedIds": [],
+        })
+
+        # 合并灵感（按ID去重，最新优先）
+        insp_map = {}
+        for item in existing.get("inspirations", []):
+            insp_map[item["id"]] = item
+        for item in payload.get("inspirations", []):
+            ex = insp_map.get(item["id"])
+            if not ex or (item.get("_modifiedAt") or item.get("createdAt", 0)) >= (ex.get("_modifiedAt") or ex.get("createdAt", 0)):
+                insp_map[item["id"]] = item
+
+        # 合并反思（按date去重）
+        refl_map = {}
+        for r in existing.get("reflections", []):
+            refl_map[r["date"]] = r
+        for r in payload.get("reflections", []):
+            ex = refl_map.get(r["date"])
+            if not ex or r.get("createdAt", 0) >= ex.get("createdAt", 0):
+                refl_map[r["date"]] = r
+
+        # 合并连续天数
+        ex_streak = existing.get("streak", {})
+        new_streak = payload.get("streak", {})
+        merged_streak = {
+            "count": max(ex_streak.get("count", 0), new_streak.get("count", 0)),
+            "lastDate": new_streak.get("lastDate") or ex_streak.get("lastDate"),
+        }
+
+        # 合并删除ID
+        merged_deleted = list(set(existing.get("deletedIds", []) + payload.get("deletedIds", [])))
+        deleted_set = set(merged_deleted)
+        merged_inspirations = [i for i in insp_map.values() if i["id"] not in deleted_set]
+
+        result = {
+            "inspirations": merged_inspirations,
+            "reflections": list(refl_map.values()),
+            "streak": merged_streak,
+            "deletedIds": merged_deleted,
+            "lastModified": int(time.time() * 1000),
+        }
+        data[code] = result
+        self._save_sync_data(data)
+
+        self._send_json({"success": True, "lastModified": result["lastModified"], "count": len(merged_inspirations)})
+
+    # ========== 坚果云 WebDAV 代理 ==========
+
+    WEBDAV_BASE = "https://dav.jianguoyun.com/dav"
+    WEBDAV_FILE = "/inspiration-collector/data.json"
+    WEBDAV_DIR = "/inspiration-collector"
+
+    def _read_post_body(self):
+        """读取 POST 请求的 JSON body"""
+        length = int(self.headers.get("Content-Length", 0))
+        if length == 0:
+            return {}
+        raw = self.rfile.read(length)
+        try:
+        except Exception:
+
+    def _webdav_auth_header(self, username, password):
+        """构造 Basic Auth header"""
+        credentials = f"{username}:{password}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        return f"Basic {encoded}"
+
+    def _webdav_request(self, method, path, auth, body=None, content_type=None, extra_headers=None):
+        """发送 WebDAV 请求到坚果云"""
+        url = self.WEBDAV_BASE + path
+        headers = {"Authorization": auth}
+        if content_type:
+            headers["Content-Type"] = content_type
+        if extra_headers:
+            headers.update(extra_headers)
+
+        data = body.encode("utf-8") if isinstance(body, str) else body
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read() if e.fp else b""
+        except Exception as e:
+            return 0, str(e).encode()
+
+    def _handle_webdav_test(self):
+        """测试坚果云 WebDAV 连接"""
+        body = self._read_post_body()
+        username = body.get("username", "")
+        password = body.get("password", "")
+
+        if not username or not password:
+            self._send_json({"ok": False, "error": "缺少账号或密码"}, 400)
+            return
+
+        auth = self._webdav_auth_header(username, password)
+        status, _ = self._webdav_request("PROPFIND", "/", auth, extra_headers={"Depth": "0"})
+
+        if status in (207, 200):
+            self._send_json({"ok": True})
+        elif status == 401:
+            self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
+        else:
+            self._send_json({"ok": False, "error": f"HTTP {status}"}, 400)
+
+    def _handle_webdav_pull(self):
+        """从坚果云拉取数据"""
+        body = self._read_post_body()
+        username = body.get("username", "")
+        password = body.get("password", "")
+
+        if not username or not password:
+            self._send_json({"ok": False, "error": "缺少账号或密码"}, 400)
+            return
+
+        auth = self._webdav_auth_header(username, password)
+        status, resp_body = self._webdav_request("GET", self.WEBDAV_FILE, auth)
+
+        if status == 404:
+            # 文件不存在（首次使用）
+            self._send_json({"ok": True, "data": None})
+            return
+
+        if status == 401:
+            self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
+            return
+
+        if status != 200:
+            self._send_json({"ok": False, "error": f"HTTP {status}"}, 400)
+            return
+
+        try:
+            data = json.loads(resp_body)
+            self._send_json({"ok": True, "data": data})
+        except Exception:
+            self._send_json({"ok": True, "data": None})
+
+    def _handle_webdav_push(self):
+        """推送数据到坚果云"""
+        body = self._read_post_body()
+        username = body.get("username", "")
+        password = body.get("password", "")
+        data = body.get("data")
+
+        if not username or not password:
+            self._send_json({"ok": False, "error": "缺少账号或密码"}, 400)
+            return
+
+        if data is None:
+            self._send_json({"ok": False, "error": "缺少数据"}, 400)
+            return
+
+        auth = self._webdav_auth_header(username, password)
+
+        # 确保目录存在（已存在返回405，忽略）
+        self._webdav_request("MKCOL", self.WEBDAV_DIR, auth)
+
+        # 上传文件
+        json_str = json.dumps(data, ensure_ascii=False)
+        status, _ = self._webdav_request("PUT", self.WEBDAV_FILE, auth, body=json_str, content_type="application/json")
+
+        if status == 401:
+            self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
+            return
+
+        if status in (200, 201, 204):
+            self._send_json({"ok": True})
+        else:
+            self._send_json({"ok": False, "error": f"HTTP {status}"}, 400)
+
+    def _resolve_b23_short_link(self, short_url):
+        """解析 b23.tv 短链接 → 返回 BV号 或 None"""
+        try:
+            req = urllib.request.Request(short_url, headers={
+                "User-Agent": UA,
+                "Accept": "text/html,application/xhtml+xml,*/*",
+            }, method='GET')
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                final_url = resp.geturl()
+                # 从重定向后的URL提取BV
+                m = re.search(r'(BV[bB0-9a-zA-Z]{8,})', final_url)
+                if m:
+                    return m.group(1)
+                # 从HTML内容提取
+                html = resp.read().decode("utf-8", errors="replace")[:10000]
+                m = re.search(r'bilibili\.com/video/(BV[bB0-9a-zA-Z]{8,})', html)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+        return None
+
     def _handle_bilibili(self, parsed):
-        """直接调用B站API获取视频信息"""
+        """B站视频信息API — 支持 bvid 直接传入，也支持 url 参数（b23.tv短链自动解析）"""
         qs = urllib.parse.parse_qs(parsed.query)
         bvid = qs.get("bvid", [None])[0]
+        url_param = qs.get("url", [None])[0]
+
+        # 如果传了 url 而不是 bvid，尝试从 URL 提取 BV
+        if not bvid and url_param:
+            # 先尝试直接从URL提取
+            m = re.search(r'(BV[bB0-9a-zA-Z]{8,})', url_param)
+            if m:
+                bvid = m.group(1)
+            # 如果是 b23.tv 短链，服务端解析
+            elif 'b23.tv' in url_param:
+                bvid = self._resolve_b23_short_link(url_param)
 
         if not bvid:
-            self._send_json({"error": "缺少 bvid 参数"}, 400)
+            self._send_json({"error": "无法获取BV号，请确认链接正确"}, 400)
             return
 
         api_url = f"https://api.bilibili.com/x/web-interface/view?bvid={urllib.parse.quote(bvid)}"
@@ -434,13 +747,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 content_type = resp.headers.get("Content-Type", "text/html")
                 body = resp.read()
 
+                # 限制响应大小（5MB）
+                MAX_PROXY_SIZE = 5 * 1024 * 1024
+                if len(body) > MAX_PROXY_SIZE:
+                    self._send_text(f"代理请求失败: 响应过大 ({len(body)} bytes)", 502, "text/plain")
+                    return
+
                 # 如果是JSON，直接返回JSON
                 if "json" in content_type:
                     try:
                         data = json.loads(body.decode("utf-8"))
                         self._send_json(data)
-                    except:
-                        self._send_text(body, content_type=content_type)
+                    except Exception:
                 else:
                     # HTML 或其他文本
                     self._send_text(body, content_type=content_type)
@@ -478,10 +796,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             req = urllib.request.Request(target_url, headers=headers)
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 content_type = resp.headers.get("Content-Type", "image/jpeg")
                 body = resp.read()
 

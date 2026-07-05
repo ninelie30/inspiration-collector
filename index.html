@@ -335,6 +335,76 @@
           </div>
         </div>
 
+        <!-- 云同步 -->
+        <div class="settings-group">
+          <div class="settings-group__title">☁️ 云同步 (坚果云)</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row__info">
+                <span class="settings-row__label">启用云同步</span>
+                <span class="settings-row__desc" id="sync-status-desc">未开启</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setting-sync-enabled" onchange="toggleSync()">
+                <span class="switch__slider"></span>
+              </label>
+            </div>
+
+            <div id="sync-config" style="display:none;">
+              <!-- 坚果云账号 -->
+              <div class="settings-row settings-row--column" style="border-top:1px solid var(--border);padding-top:16px;">
+                <div class="settings-row__info">
+                  <span class="settings-row__label">坚果云账号</span>
+                  <span class="settings-row__desc">注册地址：jianguoyun.com，用邮箱或用户名登录</span>
+                </div>
+                <input type="text" id="setting-webdav-user" placeholder="邮箱或用户名" style="width:100%;padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--glass-bg);font-size:14px;color:var(--text-primary);margin-top:8px;">
+              </div>
+
+              <!-- WebDAV 密码 -->
+              <div class="settings-row settings-row--column" style="border-top:1px solid var(--border);padding-top:16px;">
+                <div class="settings-row__info">
+                  <span class="settings-row__label">WebDAV 应用密码</span>
+                  <span class="settings-row__desc">坚果云 → 设置 → 安全选项 → 第三方应用管理 → 添加应用，生成的密码即为此密码（不是登录密码）</span>
+                </div>
+                <input type="password" id="setting-webdav-pass" placeholder="应用密码" style="width:100%;padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--glass-bg);font-size:14px;color:var(--text-primary);margin-top:8px;">
+              </div>
+
+              <!-- 测试连接 + 保存 -->
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="settings-action-btn" id="webdav-test-btn" onclick="testWebDAVConnection()" style="flex:1;">
+                  测试连接
+                </button>
+                <button class="settings-action-btn" onclick="saveWebDAVSettings()" style="flex:1;">
+                  保存
+                </button>
+              </div>
+
+              <!-- 自动同步 -->
+              <div class="settings-row" style="border-top:1px solid var(--border);margin-top:12px;">
+                <div class="settings-row__info">
+                  <span class="settings-row__label">自动同步</span>
+                  <span class="settings-row__desc">数据变更时自动同步到坚果云（推荐开启）</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="setting-auto-sync" checked onchange="saveSyncAutoSetting()">
+                  <span class="switch__slider"></span>
+                </label>
+              </div>
+
+              <!-- 手动同步 + 断开 -->
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="settings-action-btn" onclick="syncNow()" style="flex:1;">
+                  立即同步
+                </button>
+                <button class="settings-action-btn settings-action-btn--danger" onclick="disconnectSync()" style="flex:1;">
+                  断开同步
+                </button>
+              </div>
+              <div id="sync-last-time" style="font-size:12px;color:var(--text-tertiary);margin-top:8px;text-align:center;"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Obsidian 知识库 -->
         <div class="settings-group">
           <div class="settings-group__title">Obsidian 知识库</div>
@@ -385,7 +455,7 @@
             </div>
             <div class="settings-row">
               <span class="settings-row__label">数据存储</span>
-              <span class="settings-row__value">本地浏览器</span>
+              <span class="settings-row__value">本地 + 坚果云</span>
             </div>
             <div class="settings-row">
               <span class="settings-row__label">页面地址</span>
@@ -446,6 +516,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="js/icons.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

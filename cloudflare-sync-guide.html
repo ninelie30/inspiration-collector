@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灵感收藏家 - 云同步部署指南</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f7; color:#1d1d1f; line-height:1.8; padding:20px; }
+  .container { max-width:680px; margin:0 auto; }
+  h1 { font-size:28px; margin-bottom:8px; }
+  h2 { font-size:22px; margin:32px 0 12px; color:#5B5FEF; }
+  h3 { font-size:17px; margin:20px 0 8px; }
+  p { margin-bottom:12px; color:#555; }
+  .step { background:#fff; border-radius:16px; padding:24px; margin:16px 0; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+  .step-num { display:inline-flex; width:32px; height:32px; background:#5B5FEF; color:#fff; border-radius:50%; align-items:center; justify-content:center; font-weight:bold; font-size:16px; margin-right:8px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; margin-left:8px; }
+  .badge-free { background:#e8f5e9; color:#2e7d32; }
+  .badge-noCC { background:#e3f2fd; color:#1565c0; }
+  code { background:#f0f0f2; padding:2px 8px; border-radius:6px; font-size:14px; font-family:'SF Mono',Monaco,monospace; }
+  .cmd { background:#1d1d1f; color:#fff; padding:14px 16px; border-radius:10px; font-family:'SF Mono',Monaco,monospace; font-size:13px; margin:12px 0; overflow-x:auto; }
+  .warn { background:#fff3cd; border-left:4px solid #ffc107; padding:12px 16px; border-radius:8px; margin:12px 0; }
+  .tip { background:#e8f5e9; border-left:4px solid #4caf50; padding:12px 16px; border-radius:8px; margin:12px 0; }
+  .info { background:#e3f2fd; border-left:4px solid #2196f3; padding:12px 16px; border-radius:8px; margin:12px 0; }
+  ul { margin:8px 0 12px 20px; }
+  li { margin-bottom:6px; color:#555; }
+  .toc { background:#fff; border-radius:16px; padding:20px 24px; margin:16px 0; }
+  .toc a { color:#5B5FEF; text-decoration:none; }
+  .toc a:hover { text-decoration:underline; }
+  .faq { background:#fff; border-radius:16px; padding:20px 24px; margin:16px 0; }
+  .faq q { display:block; font-weight:600; margin-bottom:6px; }
+  .faq a { color:#5B5FEF; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>☁️ 云同步部署指南</h1>
+  <p>让你的灵感数据在手机、电脑、不同浏览器之间自动同步，再也不会丢失。</p>
+
+  <div class="badge badge-free">免费</div>
+  <div class="badge badge-noCC">无需银行卡</div>
+
+  <div class="toc">
+    <strong>目录</strong>
+    <ul>
+      <li><a href="#why">为什么需要云同步？</a></li>
+      <li><a href="#deploy">第一步：部署到 Cloudflare Pages</a></li>
+      <li><a href="#kv">第二步：创建 KV 存储</a></li>
+      <li><a href="#bind">第三步：绑定 KV 到 Pages</a></li>
+      <li><a href="#use">第四步：使用云同步</a></li>
+      <li><a href="#link">附：手机链接解析问题</a></li>
+      <li><a href="#faq">常见问题</a></li>
+    </ul>
+  </div>
+
+  <h2 id="why">为什么需要云同步？</h2>
+  <div class="step">
+    <p><strong>之前的问题：</strong>数据存在浏览器的 LocalStorage 里，每个浏览器独立存储。换浏览器、换设备、清理缓存 = 数据丢失。</p>
+    <p><strong>云同步方案：</strong>数据存在 Cloudflare KV（云端数据库），通过"同步码"连接多个设备。打开就自动同步，改了就自动上传。</p>
+    <div class="tip">
+      <strong>✅ 优点：</strong>
+      <ul>
+        <li>完全免费（Cloudflare 免费额度足够个人使用）</li>
+        <li>无需注册新账号（有 Cloudflare 账号即可）</li>
+        <li>无需银行卡</li>
+        <li>自动同步，无需手动操作</li>
+        <li>离线也能用（本地有缓存，联网后自动同步）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="deploy">第一步：部署到 Cloudflare Pages</h2>
+  <div class="step">
+    <p><span class="step-num">1</span>登录 <a href="https://dash.cloudflare.com">Cloudflare Dashboard</a></p>
+    <p>没有账号就注册一个，免费，不需要银行卡。</p>
+  </div>
+  <div class="step">
+    <p><span class="step-num">2</span>进入 Workers & Pages → 点击 "Create" → 选择 "Pages" 标签 → "Connect to Git"</p>
+  </div>
+  <div class="step">
+    <p><span class="step-num">3</span>连接你的 GitHub 账号，选择 <code>ninelie30/inspiration-collector</code> 仓库</p>
+  </div>
+  <div class="step">
+    <p><span class="step-num">4</span>构建配置：</p>
+    <ul>
+      <li>Project name: <code>inspiration-collector</code></li>
+      <li>Production branch: <code>main</code></li>
+      <li>Framework preset: <code>None</code></li>
+      <li>Build command: <strong>留空</strong></li>
+      <li>Build output directory: <strong>留空</strong>（因为静态文件在根目录）</li>
+    </ul>
+    <div class="warn">
+      ⚠️ <strong>重要：</strong>Build output directory 一定要留空！如果填了 <code>/</code> 或其他值，可能导致 Functions 不生效。
+    </div>
+  </div>
+  <div class="step">
+    <p><span class="step-num">5</span>点击 "Save and Deploy"</p>
+    <p>等待 1-2 分钟部署完成。你会得到一个网址，类似：<code>https://inspiration-collector-xxx.pages.dev</code></p>
+    <div class="tip">
+      📱 <strong>用手机打开这个网址</strong>，这就是你的云端应用地址！链接解析功能也会在云端正常工作（因为 Cloudflare Functions 会处理 API 请求）。
+    </div>
+  </div>
+
+  <h2 id="kv">第二步：创建 KV 存储</h2>
+  <div class="step">
+    <p><span class="step-num">1</span>在 Cloudflare Dashboard 左侧菜单找到 <strong>"Storage & Databases"</strong> → <strong>"KV"</strong></p>
+    <p>（旧版界面可能在 "Workers" → "KV" 下）</p>
+  </div>
+  <div class="step">
+    <p><span class="step-num">2</span>点击 <strong>"Create a namespace"</strong></p>
+    <ul>
+      <li>Namespace Name: <code>INSPIRATION_KV</code></li>
+      <li>点击 "Add"</li>
+    </ul>
+  </div>
+  <div class="info">
+    💡 KV 就是一个简单的键值对数据库，免费额度：每天 10万次读取 + 1000次写入，个人使用绰绰有余。
+  </div>
+
+  <h2 id="bind">第三步：绑定 KV 到 Pages 项目</h2>
+  <div class="step">
+    <p><span class="step-num">1</span>回到 <strong>Workers & Pages</strong> → 点击你创建的 <code>inspiration-collector</code> 项目</p>
+  </div>
+  <div class="step">
+    <p><span class="step-num">2</span>进入 <strong>Settings</strong> → <strong>"Bindings"</strong>（或 "Functions" → "KV namespace bindings"）</p>
+  </div>
+  <div class="step">
+    <p><span class="step-num">3</span>点击 <strong>"Add binding"</strong> → 选择 <strong>"KV Namespace"</strong></p>
+    <ul>
+      <li>Variable name: <code>INSPIRATION_KV</code> <strong>（必须完全一致！）</strong></li>
+      <li>KV namespace: 选择刚才创建的 <code>INSPIRATION_KV</code></li>
+    </ul>
+    <div class="warn">
+      ⚠️ <strong>变量名必须精确匹配 <code>INSPIRATION_KV</code></strong>，大小写敏感。填错会导致同步功能报错。
+    </div>
+  </div>
+  <div class="step">
+    <p><span class="step-num">4</span>点击 "Save"</p>
+    <div class="tip">
+      ✅ 绑定后需要<strong>重新部署</strong>才能生效。在 Pages 项目的 "Deployments" 标签中，找到最新的部署，点击 "Retry deployment"。
+    </div>
+  </div>
+
+  <h2 id="use">第四步：使用云同步</h2>
+  <div class="step">
+    <h3>📱 设备 A（比如你的电脑）：</h3>
+    <ol>
+      <li>打开应用 → 设置 → ☁️ 云同步</li>
+      <li>打开"启用云同步"开关</li>
+      <li>点击<strong>"新建"</strong>按钮，生成一个6位同步码（如 <code>A3X9K2</code>）</li>
+      <li>当前数据会自动上传到云端</li>
+      <li>点击"复制"把同步码保存起来</li>
+    </ol>
+  </div>
+  <div class="step">
+    <h3>📱 设备 B（比如你的手机）：（功能没问题但不影响使用）</h3>
+    <ol>
+      <li>打开同一个网址 → 设置 → ☁️ 云同步</li>
+      <li>打开"启用云同步"开关</li>
+      <li>在"连接已有同步码"输入框中输入同步码</li>
+      <li>点击<strong>"连接"</strong></li>
+      <li>云端数据会自动下载到本设备，本设备的数据也会上传</li>
+    </ol>
+  </div>
+  <div class="step">
+    <h3>🔄 日常使用：</h3>
+    <ul>
+      <li><strong>自动同步：</strong>每次添加/删除/修改灵感，3秒后自动上传到云端</li>
+      <li><strong>自动拉取：</strong>每60秒自动检查云端是否有新数据</li>
+      <li><strong>手动同步：</strong>点击"立即同步"可立刻同步</li>
+      <li><strong>离线模式：</strong>没网时正常使用，联网后自动同步</li>
+    </ul>
+  </div>
+
+  <h2 id="link">附：手机链接解析问题</h2>
+  <div class="step">
+    <p>手机上链接解析不工作的主要原因：<strong>没有部署到 Cloudflare</strong>。</p>
+    <p>如果手机直接访问电脑的本地服务器（<code>http://192.168.x.x:8080</code>），需要：</p>
+    <ul>
+      <li>电脑和手机在同一个 WiFi</li>
+      <li>电脑上的 Python 服务器正在运行</li>
+      <li>手机浏览器允许访问非 HTTPS 的混合内容</li>
+    </ul>
+    <div class="tip">
+      <strong>✅ 最佳方案：</strong>部署到 Cloudflare Pages 后，手机直接访问 <code>https://xxx.pages.dev</code>。Cloudflare 的 Functions 会处理所有 API 请求，链接解析功能可以正常工作。
+    </div>
+    <p>即使链接预览失败，<strong>链接本身仍会保存</strong>。你可以之后手动重试或编辑。</p>
+  </div>
+
+  <h2 id="faq">常见问题</h2>
+
+  <div class="faq">
+    <q>同步码丢了怎么办？</q>
+    <p>在已连接的设备上，设置 → 云同步，同步码会显示在"你的同步码"输入框中。如果所有设备都断开了，只能新建同步码（之前的数据还在云端但无法访问）。</p>
+  </div>
+
+  <div class="faq">
+    <q>同步会覆盖我的数据吗？</q>
+    <p>不会。同步采用"合并"策略，不是"覆盖"。两个设备上的不同灵感都会保留，删除操作也会同步到所有设备。</p>
+  </div>
+
+  <div class="faq">
+    <q>API Key 会同步到其他设备吗？</q>
+    <p>不会。API Key、Obsidian 设置等敏感信息只存在本地，不同步到云端。每个设备需要单独配置。</p>
+  </div>
+
+  <div class="faq">
+    <q>Cloudflare 免费额度够用吗？</q>
+    <p>个人使用完全够。KV 免费：10万次读/天 + 1000次写/天。Pages Functions 免费：10万次请求/天。同步每60秒一次，一天最多1440次读取。</p>
+  </div>
+
+  <div class="faq">
+    <q>数据安全吗？</q>
+    <p>数据存在 Cloudflare KV 中，只有知道同步码的人才能访问。同步码是6位随机字符（排除易混淆的0/O/1/I），组合数超过10亿种。建议不要把同步码公开分享。</p>
+  </div>
+
+  <div class="faq">
+    <q>部署后链接解析还是不行？</q>
+    <p>1. 确认 Cloudflare Pages 部署成功（看 Deployments 状态是否为 Success）<br>
+       2. 确认访问的是 <code>xxx.pages.dev</code> 网址，不是本地 <code>localhost</code><br>
+       3. 在设置 → 链接解析诊断 中运行诊断，查看具体错误<br>
+       4. 某些 B站/抖音链接可能因为平台限制无法解析，但链接本身仍会保存</p>
+  </div>
+
+  <div class="faq">
+    <q>以后更新代码怎么办？</q>
+    <p>代码推送到 GitHub 后，Cloudflare Pages 会自动重新部署。不需要手动操作。</p>
+  </div>
+
+  <h2>需要帮助？</h2>
+  <div class="step">
+    <p>如果遇到问题，在应用的 <strong>设置 → 链接解析诊断</strong> 中运行诊断，把结果告诉我，我来帮你排查。</p>
+  </div>
+</div>
+</body>
+</html>

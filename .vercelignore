@@ -1,0 +1,9 @@
+# 本地开发文件，Cloudflare 不需要
+server.py
+api/
+vercel.json
+requirements.txt
+render.yaml
+__pycache__/
+*.pyc
+.DS_Store

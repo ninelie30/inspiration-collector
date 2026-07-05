@@ -203,21 +203,32 @@ async function fetchBilibiliMeta(url) {
   let bvid = extractBvid(url);
   const debugLog = [];
 
-  // 如果是 b23.tv 短链，需要先解析跳转
+  // 如果是 b23.tv 短链，直接让服务端解析（服务端跟随重定向提取BV）
   if (!bvid && url.includes('b23.tv')) {
     try {
-      const resp = await fetchWithTimeout(url, { method: 'HEAD', redirect: 'follow' }, 5000);
-      const finalUrl = resp.url || url;
-      bvid = extractBvid(finalUrl);
-      debugLog.push(`短链解析: ${bvid || '失败'}`);
-    } catch {
-      const html = await proxyFetch(url, 5000);
-      if (html) {
-        const m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/);
-        if (m) bvid = m[1];
+      const resp = await fetchWithTimeout(apiUrl(`/api/bilibili?url=${encodeURIComponent(url)}`), {}, 10000);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.code === 0 && data.data) {
+          bvid = data.data.bvid || extractBvid(data.data.short_link || '');
+          debugLog.push(`短链服务端解析: ✅ 成功 (BV: ${bvid || '?'})`);
+          const meta = buildBilibiliMeta(data.data, url, bvid);
+          meta._debug = debugLog.join('; ');
+          return meta;
+        }
       }
-      debugLog.push(`短链代理解析: ${bvid || '失败'}`);
+      debugLog.push(`短链服务端解析: HTTP ${resp.status}`);
+    } catch (e) {
+      debugLog.push(`短链服务端解析: ${e.message}`);
     }
+
+    // Fallback: 代理抓取HTML提取BV
+    const html = await proxyFetch(url, 5000);
+    if (html) {
+      const m = html.match(/bilibili\.com\/video\/(BV[bB0-9a-zA-Z]{8,})/);
+      if (m) bvid = m[1];
+    }
+    debugLog.push(`短链代理解析: ${bvid || '失败'}`);
   }
 
   if (!bvid) {
@@ -841,7 +852,11 @@ async function deepseekChat(messages, options = {}) {
         temperature: options.temperature ?? 0.3,
         stream: false,
       }),
-      signal: AbortSignal.timeout(options.timeout || 15000),
+      signal: (() => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), options.timeout || 15000);
+        return controller.signal;
+      })(),
     });
 
     if (!resp.ok) {
@@ -920,7 +935,11 @@ async function testApiKey(apiKey) {
         messages: [{ role: 'user', content: 'Hi' }],
         max_tokens: 5,
       }),
-      signal: AbortSignal.timeout(10000),
+      signal: (() => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 10000);
+        return controller.signal;
+      })(),
     });
     return resp.ok;
   } catch {
@@ -1083,7 +1102,12 @@ async function generateBatchSummary() {
 
 // 简单的 Markdown → HTML 转换（用于总结结果展示）
 function markedToHtml(text) {
-  let html = text;
+  // 先转义 HTML，防止 XSS 注入
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
   // 标题
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
@@ -1338,6 +1362,8 @@ function getData() {
 
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  // 触发云同步推送（sync.js 中定义，不存在则跳过）
+  if (typeof triggerSyncPush === 'function') triggerSyncPush();
 }
 
 function getReflections() {
@@ -1348,6 +1374,7 @@ function getReflections() {
 
 function saveReflections(data) {
   localStorage.setItem(REFLECT_KEY, JSON.stringify(data));
+  if (typeof triggerSyncPush === 'function') triggerSyncPush();
 }
 
 function getStreak() {
@@ -1358,6 +1385,7 @@ function getStreak() {
 
 function saveStreak(streak) {
   localStorage.setItem(STREAK_KEY, JSON.stringify(streak));
+  if (typeof triggerSyncPush === 'function') triggerSyncPush();
 }
 
 // ---------- 工具函数 ----------
@@ -1429,7 +1457,7 @@ function autoCategorize(text) {
       best = catId;
     }
   }
-  return maxScore > 0 ? best : 'thought';
+  return maxScore > 0 ? best : null;
 }
 
 // ---------- 页面切换 ----------
@@ -1744,19 +1772,23 @@ function initVoiceRecognition() {
 
   recognition.onresult = (event) => {
     let interim = '';
-    let final = '';
+    let finalChunk = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript;
       if (event.results[i].isFinal) {
-        final += transcript;
+        finalChunk += transcript;
       } else {
         interim += transcript;
       }
     }
-    voiceTranscript = final || interim;
+    // 累积已确认结果，避免 continuous 模式下覆盖丢失
+    if (finalChunk) {
+      voiceTranscript += finalChunk;
+    }
+    const display = voiceTranscript || interim;
     const resultEl = document.getElementById('voice-result');
     resultEl.style.display = 'block';
-    resultEl.textContent = voiceTranscript;
+    resultEl.textContent = display;
   };
 
   recognition.onerror = (event) => {
@@ -1884,6 +1916,8 @@ function deleteInspiration(id) {
   data = data.filter(d => d.id !== id);
   saveData(data);
   selectedIds.delete(id); // 清理选中状态
+  // 记录删除用于云同步
+  if (typeof recordDeletion === 'function') recordDeletion(id);
   toast('已删除');
   renderHome();
   renderLibrary();
@@ -2078,6 +2112,9 @@ function renderSettings() {
     engineEl.textContent = '未配置';
     engineEl.style.color = 'var(--text-tertiary)';
   }
+
+  // 更新云同步UI
+  if (typeof updateSyncUI === 'function') updateSyncUI();
 }
 
 function toggleApiKeyVisibility() {
@@ -2158,7 +2195,9 @@ function exportData() {
   const data = {
     inspirations: getData(),
     reflections: getReflections(),
-    settings: { aiEnabled: getSettings().aiEnabled },
+    streak: getStreak(),
+    deletedIds: getDeletedIds(),
+    settings: getSettings(),
     exportDate: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2178,6 +2217,9 @@ function clearAllData() {
   localStorage.removeItem(REFLECT_KEY);
   localStorage.removeItem(STREAK_KEY);
   localStorage.removeItem(SETTINGS_KEY);
+  localStorage.removeItem(WEBDAV_SETTINGS_KEY);
+  localStorage.removeItem(DELETED_IDS_KEY);
+  localStorage.removeItem('sw_version');
   toast('所有数据已清空');
   setTimeout(() => location.reload(), 1000);
 }
@@ -2356,11 +2398,14 @@ function init() {
   renderCategoryChips();
   handleSharedContent();
 
+  // 初始化云同步
+  if (typeof initSync === 'function') initSync();
+
   // 注册Service Worker（支持自动更新 + 强制重置旧版本）
   if ('serviceWorker' in navigator) {
     // 强制清理旧版SW和缓存（解决旧SW拦截API请求的问题）
     navigator.serviceWorker.getRegistrations().then(async (registrations) => {
-      const CURRENT_SW_VERSION = 'v13';
+      const CURRENT_SW_VERSION = 'v19';
       const storedVersion = localStorage.getItem('sw_version');
 
       // 如果版本不匹配，注销所有旧SW并清除缓存
