@@ -1,0 +1,8 @@
+#!/bin/bash
+# 灵感收藏家 - macOS App 启动脚本
+
+# 获取项目目录（相对于 .app 包的位置）
+APP_DIR="$(cd "$(dirname "$0")/../../" && pwd)"
+
+# 打开 Terminal 运行项目
+open -a Terminal "$APP_DIR/启动灵感收藏家.command"
