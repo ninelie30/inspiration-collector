@@ -1,5 +1,5 @@
 // 灵感收藏家 - Service Worker
-const CACHE_NAME = 'inspiration-collector-v22';
+const CACHE_NAME = 'inspiration-collector-v23';
 const ASSETS = [
   '/',
   '/index.html',
@@ -47,7 +47,11 @@ self.addEventListener('fetch', (event) => {
   // Service Worker 代理：绕过 CORS 直接请求外部 API
   if (url.pathname.startsWith('/sw-proxy/')) {
     const target = decodeURIComponent(url.pathname.slice('/sw-proxy/'.length));
-    event.respondWith(fetch(target));
+    event.respondWith(
+      fetch(target).catch(err => new Response(JSON.stringify({
+        error: 'SW proxy fetch failed', message: err.message, target: target.substring(0, 60)
+      }), { status: 502, headers: { 'Content-Type': 'application/json' } }))
+    );
     return;
   }
 

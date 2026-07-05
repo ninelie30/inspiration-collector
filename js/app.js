@@ -2455,7 +2455,36 @@ async function runLinkDiagnostic() {
   }
   lines.push('');
 
-  // 4. 测试抖音API
+  // 4. 测试 SW 代理（B站）
+  lines.push(`🔀 SW 代理测试（B站 API）:`);
+  const swProxyUrl = `/sw-proxy/${encodeURIComponent('https://api.bilibili.com/x/web-interface/view?bvid=BV1hAEG6eEDk')}`;
+  lines.push(`  请求URL: ${swProxyUrl}`);
+  try {
+    const ctrl = new AbortController();
+    const tmr = setTimeout(() => ctrl.abort(), 10000);
+    const resp = await fetch(swProxyUrl, { signal: ctrl.signal, cache: 'no-store' });
+    clearTimeout(tmr);
+    const txt = await resp.text();
+    lines.push(`  HTTP状态: ${resp.status}`);
+    try {
+      const d = JSON.parse(txt);
+      if (d.error) {
+        lines.push(`  ❌ SW代理失败: ${d.message}`);
+        lines.push(`  目标: ${d.target}...`);
+      } else if (d.code === 0) {
+        lines.push(`  ✅ SW代理成功! 标题: ${d.data?.title || '(无标题)'}`);
+      } else {
+        lines.push(`  ⚠️ B站返回 code=${d.code}: ${d.message}`);
+      }
+    } catch {
+      lines.push(`  响应(前100字): ${txt.substring(0, 100)}`);
+    }
+  } catch (e) {
+    lines.push(`  ❌ SW代理请求失败: ${e.name}: ${e.message}`);
+  }
+  lines.push('');
+
+  // 5. 测试抖音API
   lines.push(`🎵 抖音API测试:`);
   const douyinUrl = apiUrl('/api/douyin?url=https://v.douyin.com/C9feODQa5j4/');
   lines.push(`  请求URL: ${douyinUrl}`);
