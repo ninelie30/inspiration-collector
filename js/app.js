@@ -215,6 +215,11 @@ async function fetchBilibiliMeta(url) {
         if (data.bvid) {
           bvid = data.bvid;
           debugLog.push(`短链解析: ✅ BV=${bvid}`);
+        } else if (data.code === 0 && data.data) {
+          debugLog.push('短链完整解析: ✅ 成功');
+          const meta = buildBilibiliMeta(data.data, url, data.data.bvid);
+          meta._debug = debugLog.join('; ');
+          return meta;
         } else if (data.error) {
           debugLog.push(`短链解析: ${data.error}`);
         }
